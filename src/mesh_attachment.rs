@@ -34,8 +34,21 @@ impl MeshAttachment {
     }
 
     #[must_use]
-    fn vertex_attachment(&self) -> &spVertexAttachment {
+    pub fn vertex_attachment(&self) -> &spVertexAttachment {
         unsafe { &self.c_ptr_ref().super_0 }
+    }
+
+    #[must_use]
+    pub fn renderer_object_exact(&self) -> *const crate::c::c_void {
+        unsafe {
+            self.renderer_object()
+                .get_atlas_region()
+                .unwrap()
+                .page()
+                .c_ptr_ref()
+                .rendererObject
+                .cast_const()
+        }
     }
 
     #[must_use]
@@ -51,6 +64,11 @@ impl MeshAttachment {
         unsafe {
             spMeshAttachment_updateRegion(self.c_ptr());
         }
+    }
+
+    #[must_use]
+    pub fn has_bones(&self) -> bool {
+        self.vertex_attachment().bonesCount > 0
     }
 
     c_attachment_accessors!();

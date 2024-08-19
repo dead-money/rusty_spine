@@ -186,6 +186,12 @@ impl From<[f32; 4]> for Color {
     }
 }
 
+impl From<Color> for [f32; 4] {
+    fn from(value: Color) -> Self {
+        [value.r, value.g, value.b, value.a]
+    }
+}
+
 fn linear_to_nonlinear(x: f32) -> f32 {
     if x <= 0.0 {
         x

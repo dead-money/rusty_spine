@@ -46,6 +46,19 @@ impl RegionAttachment {
         unsafe { &self.c_ptr_ref().super_0 }
     }
 
+    #[must_use]
+    pub fn renderer_object_exact(&self) -> *const crate::c::c_void {
+        unsafe {
+            self.renderer_object()
+                .get_atlas_region()
+                .unwrap()
+                .page()
+                .c_ptr_ref()
+                .rendererObject
+                .cast_const()
+        }
+    }
+
     /// # Safety
     ///
     /// The slot passed in must be the same slot this attachment originated from.

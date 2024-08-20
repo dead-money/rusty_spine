@@ -11,7 +11,11 @@ pub use texture::*;
 use glam::{Mat4, Vec2};
 use miniquad::*;
 use rusty_spine::{AttachmentType, Physics};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    vec,
+};
 
 fn main() {
     rusty_spine::extension::set_create_texture_cb(example_create_texture_cb);
@@ -39,7 +43,7 @@ struct Stage {
     current_spine_demo: usize,
     pipeline: Pipeline,
     last_frame_time: f64,
-    bindings: Bindings,
+    // bindings: Bindings,
     texture_delete_queue: Arc<Mutex<Vec<Texture>>>,
     screen_size: Vec2,
 }
@@ -78,11 +82,11 @@ impl Stage {
         // let demo_text =
         //     text_system.create_text(ctx, "press space for next demo", 32. * ctx.dpi_scale());
 
-        let bindings = Bindings {
-            vertex_buffers: vec![spine.buffers.vertex_buffer],
-            index_buffer: spine.buffers.index_buffer,
-            images: vec![Texture::empty()],
-        };
+        // let bindings = Bindings {
+        //     vertex_buffers: vec![spine.buffers.vertex_buffer],
+        //     index_buffer: spine.buffers.index_buffer,
+        //     images: vec![Texture::empty()],
+        // };
 
         Stage {
             spine,
@@ -90,7 +94,7 @@ impl Stage {
             current_spine_demo,
             pipeline,
             last_frame_time: date::now(),
-            bindings,
+            // bindings,
             texture_delete_queue,
             screen_size: Vec2::new(800., 600.),
         }
@@ -228,14 +232,9 @@ impl EventHandler for Stage {
 
         let skeleton = &self.spine.controller.skeleton;
 
+        // Extract bone transforms from the skeleton.
         let mut bones = [Mat4::IDENTITY; 100];
-
-        for slot_index in 0..skeleton.slots_count() {
-            let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
-                continue;
-            };
-
-            let bone = slot.bone();
+        for bone in skeleton.bones() {
             let bone_index = bone.data().index();
 
             let transform = Mat4::from_cols_array_2d(&[
@@ -245,34 +244,36 @@ impl EventHandler for Stage {
                 [bone.world_x(), bone.world_y(), 0.0, 1.0],
             ]);
 
-            bones[slot_index] = transform;
+            bones[bone_index] = transform;
         }
-
-        // for (i, bone) in skeleton.bones().enumerate() {
-        //     println!("{i}, {:?}", bone.world_x());
-        //     let transform = Mat4::from_cols_array_2d(&[
-        //         [bone.a(), bone.b(), 0.0, 0.0],
-        //         [bone.c(), bone.d(), 0.0, 0.0],
-        //         [0.0, 0.0, 1.0, 0.0],
-        //         [bone.world_x(), bone.world_y(), 0.0, 1.0],
-        //     ]);
-        //     bones[i] = transform;
-        // }
 
         ctx.apply_uniforms(&Uniforms {
             world: self.spine.world,
             view: self.view(),
             bones,
+            testbone: Mat4::IDENTITY,
         });
 
         for slot_index in 0..skeleton.slots_count() {
+            // if slot_index != 0 {
+                // continue;
+            // }
+
             let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
                 continue;
             };
 
-            if !slot.bone().active() {
+            let bone = slot.bone();
+            let bone_index = bone.data().index();
+
+            if !bone.active() {
                 continue;
             }
+
+            // Find the buffer metadata for this slot.
+            let Some(slot_meta) = self.spine.buffers.slot_meta.get(&slot_index) else {
+                continue;
+            };
 
             let Some(attachment) = slot.attachment() else {
                 continue;
@@ -304,40 +305,35 @@ impl EventHandler for Stage {
 
             let spine_texture = unsafe { &mut *(renderer_object as *mut SpineTexture) };
 
-            if let SpineTexture::Loaded(texture) = spine_texture {
-                self.bindings.images[0] = *texture;
-            }
+            // let bindings = Bindings
 
-            ctx.apply_bindings(&self.bindings);
-
-            // Find the buffer metadata for this slot.
-            let Some(attachment_info) = self
-                .spine
-                .buffers
-                .attachment_info
-                .iter()
-                .find(|info| info.slot_index == slot_index as u16)
-            else {
+            let bindings = if let SpineTexture::Loaded(texture) = spine_texture {
+                // self.bindings.images[0] = *texture;
+                Bindings {
+                    vertex_buffers: vec![self.spine.buffers.vertex_buffer],
+                    index_buffer: self.spine.buffers.index_buffer,
+                    images: vec![*texture],
+                }
+            } else {
                 continue;
             };
 
-            // Set up attachment-specific uniforms
-            let bone = slot.bone();
+            ctx.apply_bindings(&bindings);
 
-            ctx.draw(
-                attachment_info.index_start as i32,
-                attachment_info.index_count as i32,
-                1,
-            );
+            let BlendStates {
+                alpha_blend,
+                color_blend,
+            } = slot
+                .data()
+                .blend_mode()
+                .get_blend_states(self.spine.controller.settings.premultiplied_alpha);
+            ctx.set_blend(Some(color_blend), Some(alpha_blend));
 
-            // let BlendStates {
-            //     alpha_blend,
-            //     color_blend,
-            // } = slot
-            //     .data()
-            //     .blend_mode
-            //     .get_blend_states(self.spine.controller.settings.premultiplied_alpha);
-            // ctx.set_blend(Some(color_blend), Some(alpha_blend));
+            // let bone_transform = bones[bone_index];
+            // println!("bone_transform: {:?} {}", bone_transform, bone_index);
+            // println!("slot meta: {:?}", slot_meta);
+
+            ctx.draw(slot_meta.index_start, slot_meta.index_count, 1);
         }
 
         ctx.end_render_pass();
@@ -350,18 +346,17 @@ const MAX_MESH_INDICES: usize = 20000;
 const MAX_BONES: usize = 200;
 
 #[derive(Debug)]
-pub struct AttachmentInfo {
-    pub slot_index: u16,
+pub struct SlotMeta {
     pub vertex_start: u32,
     pub vertex_count: u32,
-    pub index_start: u32,
-    pub index_count: u32,
+    pub index_start: i32,
+    pub index_count: i32,
 }
 
 pub struct SkeletonBuffers {
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub attachment_info: Vec<AttachmentInfo>,
+    pub slot_meta: HashMap<usize, SlotMeta>,
 }
 
 /// An instance of this enum is created for each loaded [`rusty_spine::atlas::AtlasPage`] upon

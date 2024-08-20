@@ -15,12 +15,12 @@ use std::sync::{Arc, Mutex};
 /// And blend states are different depending on if the texture has premultiplied alpha values.
 ///
 /// So, 8 blend states must be supported. See [`GetBlendStates::get_blend_states`] below.
-struct BlendStates {
-    alpha_blend: BlendState,
-    color_blend: BlendState,
+pub struct BlendStates {
+    pub alpha_blend: BlendState,
+    pub color_blend: BlendState,
 }
 
-trait GetBlendStates {
+pub trait GetBlendStates {
     fn get_blend_states(&self, premultiplied_alpha: bool) -> BlendStates;
 }
 

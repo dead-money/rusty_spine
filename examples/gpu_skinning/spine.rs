@@ -62,12 +62,11 @@ impl Spine {
             .set_animation_by_name(0, info.animation, true)
             .unwrap_or_else(|_| panic!("failed to start animation: {}", info.animation));
 
-        // controller.animation_state.set_timescale(0.1);
+        controller.animation_state.set_timescale(0.1);
 
         controller.settings.premultiplied_alpha = premultiplied_alpha;
 
-        let (vertices, indices, attachment_info) =
-            Self::build_skeleton_buffers(&controller.skeleton);
+        let (vertices, indices, slot_meta) = Self::build_skeleton_buffers(&controller.skeleton);
 
         let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &vertices);
         let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &indices);
@@ -83,38 +82,43 @@ impl Spine {
             buffers: SkeletonBuffers {
                 vertex_buffer,
                 index_buffer,
-                attachment_info,
+                slot_meta,
             },
         }
     }
 
     /// For a fully GPU skinned and instanced skeleton, we prepare buffers for
     /// vertex, index, and bone weight data at load time.
-    fn build_skeleton_buffers(skeleton: &Skeleton) -> (Vec<Vertex>, Vec<u16>, Vec<AttachmentInfo>) {
+    fn build_skeleton_buffers(
+        skeleton: &Skeleton,
+    ) -> (Vec<Vertex>, Vec<u16>, HashMap<usize, SlotMeta>) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let mut attachment_info = Vec::new();
+        let mut slot_meta = HashMap::new();
 
-        for slot_index in 0..skeleton.slots_count() {
-            let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
-                continue;
-            };
-
-            if !slot.bone().active() {
-                continue;
-            }
+        for slot in skeleton.slots() {
+            let bone = slot.bone();
+            let bone_name = bone.data().name().to_string();
+            let slot_index = slot.data().index();
+            let slot_name = slot.data().name().to_string();
 
             let Some(attachment) = slot.attachment() else {
+                println!("Skipping slot {} which has no attachment.", slot_index);
                 continue;
             };
 
-            let bone_index = slot_index;
-            // let bone_index = slot.bone().data().index();
+            // let bone_index = slot_index;
+            let bone_index = slot.bone().data().index();
+            println!(
+                "Slot {} {} is on bone {} {}.",
+                slot_index, slot_name, bone_index, bone_name
+            );
 
             let vertex_start = vertices.len() as u32;
-            let index_start = indices.len() as u32;
+            let index_start = indices.len() as i32;
 
             if let Some(region_attachment) = attachment.as_region() {
+                println!("Slot {} is a region attachment.", slot_index);
                 let mut region_vertices = Vec::with_capacity(4);
 
                 // Offset contains the local position of the vertices.
@@ -130,15 +134,12 @@ impl Spine {
                         offsets[vertex_index * vertex_size + 1],
                     );
 
+                    println!("Vertex {} at {:?}", vertex_index, positions[0]);
+
                     region_vertices.push(Vertex {
                         positions,
                         bone_weights: [1.0, 0.0, 0.0, 0.0],
-                        bone_indices: [
-                            bone_index as f32,
-                            bone_index as f32,
-                            bone_index as f32,
-                            bone_index as f32,
-                        ],
+                        bone_indices: [bone_index as u32; 4],
                         color: region_attachment.color().into(),
                         uv: [uvs[vertex_index * 2], uvs[vertex_index * 2 + 1]].into(),
                     });
@@ -177,7 +178,7 @@ impl Spine {
                         bone_index += 1;
 
                         let mut bone_weights = [0.0; 4];
-                        let mut bone_indices = [0.0; 4];
+                        let mut bone_indices = [0; 4];
                         let mut positions = [Vec2::ZERO; 4];
 
                         for j in 0..bone_count.min(4) {
@@ -188,7 +189,7 @@ impl Spine {
                             let weight = vertices_data[vertex_index * 3 + 2];
                             bone_weights[j] = weight;
 
-                            bone_indices[j] = bones[bone_index + j] as f32;
+                            bone_indices[j] = bones[bone_index + j] as u32;
                         }
 
                         // Normalize weights
@@ -241,12 +242,7 @@ impl Spine {
                         let vertex = Vertex {
                             positions,
                             bone_weights: [1.0, 0.0, 0.0, 0.0], // Only influenced by one bone
-                            bone_indices: [
-                                bone_index as f32,
-                                bone_index as f32,
-                                bone_index as f32,
-                                bone_index as f32,
-                            ],
+                            bone_indices: [bone_index as u32; 4],
                             color: mesh_attachment.color().into(),
                             uv: uv.into(),
                         };
@@ -267,20 +263,20 @@ impl Spine {
             }
 
             //
-            let metadata = AttachmentInfo {
-                slot_index: slot_index as u16,
+            let metadata = SlotMeta {
                 vertex_start,
                 vertex_count: (vertices.len() as u32 - vertex_start),
                 index_start,
-                index_count: (indices.len() as u32 - index_start),
+                index_count: (indices.len() as i32 - index_start),
             };
 
             println!("metadata: {:?}", metadata);
 
-            attachment_info.push(metadata);
+            slot_meta.insert(slot_index, metadata);
+            // break;
         }
 
-        (vertices, indices, attachment_info)
+        (vertices, indices, slot_meta)
     }
 
     fn get_bone_transforms(&self) -> Vec<Mat4> {

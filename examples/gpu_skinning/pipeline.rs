@@ -5,7 +5,7 @@ use miniquad::*;
 pub struct Vertex {
     pub positions: [Vec2; 4],
     pub bone_weights: [f32; 4],
-    pub bone_indices: [f32; 4],
+    pub bone_indices: [u32; 4],
     pub color: [f32; 4],
     pub uv: Vec2,
 }
@@ -15,6 +15,7 @@ pub struct Uniforms {
     pub world: Mat4,
     pub view: Mat4,
     pub bones: [Mat4; 100],
+    pub testbone: Mat4,
 }
 
 pub const VERTEX: &str = r#"
@@ -24,13 +25,14 @@ pub const VERTEX: &str = r#"
         in vec2 position2;
         in vec2 position3;
         in vec4 bone_weights;
-        in vec4 bone_indices;
+        in uvec4 bone_indices;
         in vec4 color;
         in vec2 uv;
 
         uniform mat4 world;
         uniform mat4 view;
         uniform mat4 bones[100];
+        uniform mat4 testbone;
 
         out vec2 v_uv;
         out vec4 v_color;
@@ -38,19 +40,19 @@ pub const VERTEX: &str = r#"
         void main() {
             vec2 skinned_pos = vec2(0.0, 0.0);
 
-            int bone_index = int(bone_indices[0]);
+            uint bone_index = bone_indices[0];
             vec4 local_pos = vec4(position0, 0.0, 1.0);
             skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[0];
 
-            bone_index = int(bone_indices[1]);
+            bone_index = bone_indices[1];
             local_pos = vec4(position1, 0.0, 1.0);
             skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[1];
 
-            bone_index = int(bone_indices[2]);
+            bone_index = bone_indices[2];
             local_pos = vec4(position2, 0.0, 1.0);
             skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[2];
 
-            bone_index = int(bone_indices[3]);
+            bone_index = bone_indices[3];
             local_pos = vec4(position3, 0.0, 1.0);
             skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[3];
 
@@ -85,7 +87,8 @@ pub fn shader_meta() -> ShaderMeta {
             uniforms: vec![
                 UniformDesc::new("world", UniformType::Mat4),
                 UniformDesc::new("view", UniformType::Mat4),
-                UniformDesc::new("bones", UniformType::Mat4),
+                UniformDesc::new("bones", UniformType::Mat4).array(100),
+                UniformDesc::new("testbone", UniformType::Mat4),
             ],
         },
     }

@@ -1,7 +1,5 @@
-use glam::{Mat4, Vec2, Vec4};
 use miniquad::*;
 use rusty_spine::BlendMode;
-use std::sync::{Arc, Mutex};
 
 /// Convert a [`rusty_spine::BlendMode`] to a pair of [`miniquad::BlendState`]s. One for alpha, one
 /// for color.

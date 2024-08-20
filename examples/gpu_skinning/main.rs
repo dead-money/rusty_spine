@@ -227,8 +227,11 @@ impl EventHandler for Stage {
         }
 
         ctx.begin_default_pass(Default::default());
-        ctx.clear(Some((0.1, 0.2, 0.3, 1.0)), None, None);
+        ctx.clear(Some((0.1, 0.1, 0.1, 1.0)), None, None);
         ctx.apply_pipeline(&self.pipeline);
+
+        // Spine data is clockwise by default!
+        ctx.set_cull_face(self.spine.cull_face);
 
         let skeleton = &self.spine.controller.skeleton;
 
@@ -251,17 +254,23 @@ impl EventHandler for Stage {
             world: self.spine.world,
             view: self.view(),
             bones,
-            testbone: Mat4::IDENTITY,
         });
 
         for slot_index in 0..skeleton.slots_count() {
-            // if slot_index != 0 {
-                // continue;
-            // }
-
             let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
                 continue;
             };
+
+            let slot_name = slot.data().name().to_string();
+
+            let BlendStates {
+                alpha_blend,
+                color_blend,
+            } = slot
+                .data()
+                .blend_mode()
+                .get_blend_states(self.spine.controller.settings.premultiplied_alpha);
+            ctx.set_blend(Some(color_blend), Some(alpha_blend));
 
             let bone = slot.bone();
             let bone_index = bone.data().index();
@@ -305,10 +314,7 @@ impl EventHandler for Stage {
 
             let spine_texture = unsafe { &mut *(renderer_object as *mut SpineTexture) };
 
-            // let bindings = Bindings
-
             let bindings = if let SpineTexture::Loaded(texture) = spine_texture {
-                // self.bindings.images[0] = *texture;
                 Bindings {
                     vertex_buffers: vec![self.spine.buffers.vertex_buffer],
                     index_buffer: self.spine.buffers.index_buffer,
@@ -320,15 +326,6 @@ impl EventHandler for Stage {
 
             ctx.apply_bindings(&bindings);
 
-            let BlendStates {
-                alpha_blend,
-                color_blend,
-            } = slot
-                .data()
-                .blend_mode()
-                .get_blend_states(self.spine.controller.settings.premultiplied_alpha);
-            ctx.set_blend(Some(color_blend), Some(alpha_blend));
-
             // let bone_transform = bones[bone_index];
             // println!("bone_transform: {:?} {}", bone_transform, bone_index);
             // println!("slot meta: {:?}", slot_meta);
@@ -339,6 +336,10 @@ impl EventHandler for Stage {
         ctx.end_render_pass();
         ctx.commit_frame();
     }
+
+    fn resize_event(&mut self, ctx: &mut Context, width: f32, height: f32) {
+        self.screen_size = Vec2::new(width, height) / ctx.dpi_scale();
+    }
 }
 
 const MAX_MESH_VERTICES: usize = 10000;
@@ -347,8 +348,8 @@ const MAX_BONES: usize = 200;
 
 #[derive(Debug)]
 pub struct SlotMeta {
-    pub vertex_start: u32,
-    pub vertex_count: u32,
+    // pub vertex_start: u32,
+    // pub vertex_count: u32,
     pub index_start: i32,
     pub index_count: i32,
 }

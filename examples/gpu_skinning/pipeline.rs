@@ -15,7 +15,6 @@ pub struct Uniforms {
     pub world: Mat4,
     pub view: Mat4,
     pub bones: [Mat4; 100],
-    pub testbone: Mat4,
 }
 
 pub const VERTEX: &str = r#"
@@ -32,7 +31,6 @@ pub const VERTEX: &str = r#"
         uniform mat4 world;
         uniform mat4 view;
         uniform mat4 bones[100];
-        uniform mat4 testbone;
 
         out vec2 v_uv;
         out vec4 v_color;
@@ -88,7 +86,6 @@ pub fn shader_meta() -> ShaderMeta {
                 UniformDesc::new("world", UniformType::Mat4),
                 UniformDesc::new("view", UniformType::Mat4),
                 UniformDesc::new("bones", UniformType::Mat4).array(100),
-                UniformDesc::new("testbone", UniformType::Mat4),
             ],
         },
     }

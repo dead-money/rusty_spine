@@ -1,7 +1,5 @@
-use glam::{Mat4, Vec2, Vec4};
 use miniquad::*;
 use rusty_spine::atlas::{AtlasFilter, AtlasFormat, AtlasPage, AtlasWrap};
-use std::sync::{Arc, Mutex};
 
 pub fn example_create_texture_cb(atlas_page: &mut AtlasPage, path: &str) {
     fn convert_filter(filter: AtlasFilter) -> FilterMode {

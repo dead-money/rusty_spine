@@ -132,7 +132,7 @@ impl Spine {
 
                     region_vertices.push(Vertex {
                         positions,
-                        bone_weights: [1.0, 0.0, 0.0, 0.0], // Only influenced by one bone
+                        bone_weights: [1.0, 0.0, 0.0, 0.0],
                         bone_indices: [
                             bone_index as f32,
                             bone_index as f32,
@@ -160,7 +160,7 @@ impl Spine {
             }
 
             if let Some(mesh_attachment) = attachment.as_mesh() {
-                continue;
+                // continue;
                 if mesh_attachment.has_bones() {
                     let vertex_size = 3;
                     let vertex_count = mesh_attachment.vertices().len() / vertex_size;

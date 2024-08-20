@@ -224,22 +224,40 @@ impl EventHandler for Stage {
 
         ctx.begin_default_pass(Default::default());
         ctx.clear(Some((0.1, 0.2, 0.3, 1.0)), None, None);
-
         ctx.apply_pipeline(&self.pipeline);
 
         let skeleton = &self.spine.controller.skeleton;
 
         let mut bones = [Mat4::IDENTITY; 100];
 
-        for (i, bone) in skeleton.bones().enumerate() {
+        for slot_index in 0..skeleton.slots_count() {
+            let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
+                continue;
+            };
+
+            let bone = slot.bone();
+            let bone_index = bone.data().index();
+
             let transform = Mat4::from_cols_array_2d(&[
                 [bone.a(), bone.b(), 0.0, 0.0],
                 [bone.c(), bone.d(), 0.0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
                 [bone.world_x(), bone.world_y(), 0.0, 1.0],
             ]);
-            bones[i] = transform;
+
+            bones[slot_index] = transform;
         }
+
+        // for (i, bone) in skeleton.bones().enumerate() {
+        //     println!("{i}, {:?}", bone.world_x());
+        //     let transform = Mat4::from_cols_array_2d(&[
+        //         [bone.a(), bone.b(), 0.0, 0.0],
+        //         [bone.c(), bone.d(), 0.0, 0.0],
+        //         [0.0, 0.0, 1.0, 0.0],
+        //         [bone.world_x(), bone.world_y(), 0.0, 1.0],
+        //     ]);
+        //     bones[i] = transform;
+        // }
 
         ctx.apply_uniforms(&Uniforms {
             world: self.spine.world,

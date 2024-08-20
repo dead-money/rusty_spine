@@ -15,6 +15,7 @@ pub struct Uniforms {
     pub world: Mat4,
     pub view: Mat4,
     pub bones: [Mat4; 100],
+    pub bone_index: i32,
 }
 
 pub const VERTEX: &str = r#"
@@ -31,30 +32,38 @@ pub const VERTEX: &str = r#"
         uniform mat4 world;
         uniform mat4 view;
         uniform mat4 bones[100];
+        uniform int current_bone;
 
         out vec2 v_uv;
         out vec4 v_color;
 
         void main() {
-            vec2 skinned_pos = vec2(0.0, 0.0);
+            vec3 skinned_pos = vec3(0.0, 0.0, 0.0);
 
-            uint bone_index = bone_indices[0];
+            uint bone_index;
+
+            if (current_bone >= 0) {
+                bone_index = uint(current_bone);
+            } else {
+                bone_index = bone_indices[0];
+            }
+
             vec4 local_pos = vec4(position0, 0.0, 1.0);
-            skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[0];
+            skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[0];
 
             bone_index = bone_indices[1];
             local_pos = vec4(position1, 0.0, 1.0);
-            skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[1];
+            skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[1];
 
             bone_index = bone_indices[2];
             local_pos = vec4(position2, 0.0, 1.0);
-            skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[2];
+            skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[2];
 
             bone_index = bone_indices[3];
             local_pos = vec4(position3, 0.0, 1.0);
-            skinned_pos += (bones[bone_index] * local_pos).xy * bone_weights[3];
+            skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[3];
 
-            gl_Position = view * world * vec4(skinned_pos, 0.0, 1.0);
+            gl_Position = view * world * vec4(skinned_pos, 1.0);
             v_uv = uv;
             v_color = color;
         }
@@ -86,6 +95,7 @@ pub fn shader_meta() -> ShaderMeta {
                 UniformDesc::new("world", UniformType::Mat4),
                 UniformDesc::new("view", UniformType::Mat4),
                 UniformDesc::new("bones", UniformType::Mat4).array(100),
+                UniformDesc::new("current_bone", UniformType::Int1),
             ],
         },
     }

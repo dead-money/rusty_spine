@@ -450,6 +450,8 @@ struct Stage {
 }
 
 impl Stage {
+
+
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
             SpineDemo {
@@ -568,6 +570,7 @@ impl EventHandler for Stage {
         let dt = ((now - self.last_frame_time) as f32).max(0.001);
         self.spine.controller.update(dt, Physics::Update);
         self.last_frame_time = now;
+        self.print_fps(ctx);
     }
 
     fn draw(&mut self, ctx: &mut Context) {

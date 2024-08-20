@@ -1,10 +1,11 @@
 use super::*;
-use glam::{Mat4, Vec2, Vec4};
+use glam::{Mat4, Vec2};
 use miniquad::*;
 use rusty_spine::{
     controller::{SkeletonController, SkeletonControllerSettings},
     draw::{ColorSpace, CullDirection},
-    AnimationStateData, Atlas, Skeleton, SkeletonBinary, SkeletonJson,
+    AnimationStateData, Atlas, MeshAttachment, RegionAttachment, Skeleton, SkeletonBinary,
+    SkeletonJson,
 };
 use std::sync::Arc;
 
@@ -62,11 +63,11 @@ impl Spine {
             .set_animation_by_name(0, info.animation, true)
             .unwrap_or_else(|_| panic!("failed to start animation: {}", info.animation));
 
-        // controller.animation_state.set_timescale(0.1);
+        // controller.animation_state.set_timescale(0.25);
 
         controller.settings.premultiplied_alpha = premultiplied_alpha;
 
-        let (vertices, indices, slot_meta) = Self::build_skeleton_buffers(&controller.skeleton);
+        let (vertices, indices, attachments) = Self::build_skeleton_buffers(&controller.skeleton);
 
         let vertex_buffer = Buffer::immutable(ctx, BufferType::VertexBuffer, &vertices);
         let index_buffer = Buffer::immutable(ctx, BufferType::IndexBuffer, &indices);
@@ -82,171 +83,208 @@ impl Spine {
             buffers: SkeletonBuffers {
                 vertex_buffer,
                 index_buffer,
-                slot_meta,
+                attachments,
             },
         }
+    }
+
+    fn build_region_attachment(attachment: &RegionAttachment, v0: u32) -> (Vec<Vertex>, Vec<u32>) {
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        let offsets = attachment.offset();
+        let mut offset_cursor = 0;
+
+        let uvs = attachment.uvs();
+
+        let mut positions = [Vec2::ZERO; 4];
+
+        for vertex_index in 0..4 {
+            positions[0] = Vec2::new(offsets[offset_cursor], offsets[offset_cursor + 1]);
+
+            vertices.push(Vertex {
+                positions,
+                bone_weights: [1.0, 0.0, 0.0, 0.0],
+                bone_indices: [0; 4], // Will be influenced by the bone of the slot it is attached to.
+                color: attachment.color().into(),
+                uv: [uvs[offset_cursor], uvs[offset_cursor + 1]].into(),
+            });
+
+            offset_cursor += 2;
+        }
+
+        indices.extend_from_slice(&[v0 + 0, v0 + 2, v0 + 3, v0 + 1, v0 + 2, v0 + 0]);
+
+        (vertices, indices)
+    }
+
+    fn build_skinned_attachment(attachment: &MeshAttachment, v0: u32) -> (Vec<Vertex>, Vec<u32>) {
+        let vertices_data = attachment.vertices();
+        let mut vertices_cursor = 0 as usize;
+
+        let bones_data = attachment.bones();
+        let mut bones_cursor = 0 as usize;
+
+        let vertex_count = (attachment.world_vertices_length() / 2) as usize;
+        let mut vertices = Vec::with_capacity(vertex_count);
+        let mut indices = Vec::new();
+
+        for vertex_index in 0..vertex_count {
+            let bone_count = bones_data[bones_cursor] as usize;
+            bones_cursor += 1;
+
+            let mut bone_weights = [0.0; 4];
+            let mut bone_indices = [0; 4];
+            let mut positions = [Vec2::ZERO; 4];
+
+            for j in 0..bone_count.min(4) {
+                let x = vertices_data[vertices_cursor];
+                let y = vertices_data[vertices_cursor + 1];
+                let w = vertices_data[vertices_cursor + 2];
+                let b = bones_data[bones_cursor] as u32;
+                vertices_cursor += 3;
+
+                positions[j] = Vec2::new(x, y);
+                bone_weights[j] = w;
+                bone_indices[j] = b;
+                bones_cursor += 1;
+            }
+
+            let uvs = attachment.uvs();
+            let uv = unsafe {
+                [
+                    *uvs.offset(vertex_index as isize * 2),
+                    *uvs.offset(vertex_index as isize * 2 + 1),
+                ]
+            };
+
+            let vertex = Vertex {
+                positions,
+                bone_weights,
+                bone_indices,
+                color: attachment.color().into(),
+                uv: uv.into(),
+            };
+
+            vertices.push(vertex)
+        }
+
+        let index_count = attachment.triangles_count() as usize;
+        let indices_data = attachment.triangles();
+        let vertex_offset = v0 as u32;
+
+        unsafe {
+            let indices_slice = std::slice::from_raw_parts(indices_data, index_count);
+            indices.extend(indices_slice.iter().map(|&i| vertex_offset + i as u32));
+        }
+
+        (vertices, indices)
+    }
+
+    fn build_mesh_attachment(attachment: &MeshAttachment, v0: u32) -> (Vec<Vertex>, Vec<u32>) {
+        let vertex_size = 2;
+        let vertex_count = attachment.vertices().len() / vertex_size;
+        let vertices_data = attachment.vertices();
+
+        let uvs = attachment.uvs();
+
+        let mut vertices = Vec::with_capacity(vertex_count);
+        let mut indices = Vec::new();
+
+        for vertex_index in 0..vertex_count {
+            let mut positions = [Vec2::ZERO; 4];
+
+            positions[0] = Vec2::new(
+                vertices_data[vertex_index * vertex_size],
+                vertices_data[vertex_index * vertex_size + 1],
+            );
+
+            let uv = unsafe {
+                [
+                    *uvs.offset(vertex_index as isize * 2),
+                    *uvs.offset(vertex_index as isize * 2 + 1),
+                ]
+            };
+
+            let vertex = Vertex {
+                positions,
+                bone_weights: [1.0, 0.0, 0.0, 0.0], // Only influenced by one bone
+                bone_indices: [0; 4],
+                color: attachment.color().into(),
+                uv: uv.into(),
+            };
+
+            vertices.push(vertex);
+        }
+
+        let index_count = attachment.triangles_count() as usize;
+        let indices_data = attachment.triangles();
+        let vertex_offset = v0;
+
+        unsafe {
+            let indices_slice = std::slice::from_raw_parts(indices_data, index_count);
+            indices.extend(indices_slice.iter().map(|&i| vertex_offset + i as u32));
+        }
+
+        (vertices, indices)
     }
 
     /// For a fully GPU skinned and instanced skeleton, we prepare buffers for
     /// vertex, index, and bone weight data at load time.
     fn build_skeleton_buffers(
         skeleton: &Skeleton,
-    ) -> (Vec<Vertex>, Vec<u32>, HashMap<usize, SlotMeta>) {
+    ) -> (Vec<Vertex>, Vec<u32>, HashMap<String, AttachmentMeta>) {
         let mut vertices = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
-        let mut slot_meta = HashMap::new();
+        let mut attachments = HashMap::new();
 
-        for slot in skeleton.slots() {
-            let bone = slot.bone();
-            let bone_name = bone.data().name().to_string();
-            let slot_index = slot.data().index();
-            let slot_name = slot.data().name().to_string();
+        for skin in skeleton.data().skins() {
+            for attachment in skin.attachments() {
+                let attachment = &attachment.attachment;
+                let attachment_name = attachment.name().to_string();
 
-            let Some(attachment) = slot.attachment() else {
-                continue;
-            };
+                let i0 = indices.len() as i32;
+                let v0 = vertices.len() as u32;
 
-            let bone_index = slot.bone().data().index();
-            let v0 = vertices.len() as u32;
-            let i0 = indices.len() as i32;
+                if let Some(region_attachment) = attachment.as_region() {
+                    let (attachment_vertices, attachment_indices) =
+                        Self::build_region_attachment(&region_attachment, v0);
 
-            if let Some(region_attachment) = attachment.as_region() {
-                // Offset contains the local position of the vertices.
-                let offsets = region_attachment.offset();
-                let mut offset_cursor = 0;
+                    vertices.extend(attachment_vertices);
+                    indices.extend(attachment_indices);
 
-                let uvs = region_attachment.uvs();
+                    let attachment_meta = AttachmentMeta {
+                        index_start: i0,
+                        index_count: (indices.len() as i32) - i0,
+                        uses_current_bone: true,
+                    };
 
-                let mut positions = [Vec2::ZERO; 4];
-
-                for vertex_index in 0..4 {
-                    // Only one influence, the bone of the slot, so we only
-                    // write one position per vertex.
-                    positions[0] = Vec2::new(offsets[offset_cursor], offsets[offset_cursor + 1]);
-
-                    vertices.push(Vertex {
-                        positions,
-                        bone_weights: [1.0, 0.0, 0.0, 0.0],
-                        bone_indices: [bone_index as u32; 4],
-                        color: region_attachment.color().into(),
-                        uv: [uvs[offset_cursor], uvs[offset_cursor + 1]].into(),
-                    });
-
-                    offset_cursor += 2;
+                    attachments.insert(attachment_name.clone(), attachment_meta);
                 }
 
-                // Quad Indices
-                // ccw:
-                // indices.extend_from_slice(&[v0 + 1, v0 + 3, v0 + 2, v0 + 0, v0 + 3, v0 + 1]);
+                if let Some(mesh_attachment) = attachment.as_mesh() {
+                    let mut uses_current_bone = false;
+                    let (attachment_vertices, attachment_indices) = if mesh_attachment.has_bones() {
+                        Self::build_skinned_attachment(&mesh_attachment, v0)
+                    } else {
+                        uses_current_bone = true;
+                        Self::build_mesh_attachment(&mesh_attachment, v0)
+                    };
 
-                // cw:
-                indices.extend_from_slice(&[v0 + 0, v0 + 2, v0 + 3, v0 + 1, v0 + 2, v0 + 0]);
-            }
+                    vertices.extend(attachment_vertices);
+                    indices.extend(attachment_indices);
 
-            if let Some(mesh_attachment) = attachment.as_mesh() {
-                if mesh_attachment.has_bones() {
-                    let vertices_data = mesh_attachment.vertices();
-                    let mut vertices_cursor = 0 as usize;
+                    let attachment_meta = AttachmentMeta {
+                        index_start: i0,
+                        index_count: (indices.len() as i32) - i0,
+                        uses_current_bone,
+                    };
 
-                    let bones_data = mesh_attachment.bones();
-                    let mut bones_cursor = 0 as usize;
-
-                    let vertex_count = (mesh_attachment.world_vertices_length() / 2) as usize;
-                    for vertex_index in 0..vertex_count {
-                        let bone_count = bones_data[bones_cursor] as usize;
-                        bones_cursor += 1;
-
-                        let mut bone_weights = [0.0; 4];
-                        let mut bone_indices = [0; 4];
-                        let mut positions = [Vec2::ZERO; 4];
-
-                        for j in 0..bone_count.min(4) {
-                            let x = vertices_data[vertices_cursor];
-                            let y = vertices_data[vertices_cursor + 1];
-                            let w = vertices_data[vertices_cursor + 2];
-                            let b = bones_data[bones_cursor] as u32;
-                            vertices_cursor += 3;
-
-                            positions[j] = Vec2::new(x, y);
-                            bone_weights[j] = w;
-                            bone_indices[j] = b;
-                            bones_cursor += 1;
-                        }
-
-                        let uvs = mesh_attachment.uvs();
-                        let uv = unsafe {
-                            [
-                                *uvs.offset(vertex_index as isize * 2),
-                                *uvs.offset(vertex_index as isize * 2 + 1),
-                            ]
-                        };
-
-                        let vertex = Vertex {
-                            positions,
-                            bone_weights,
-                            bone_indices,
-                            color: mesh_attachment.color().into(),
-                            uv: uv.into(),
-                        };
-
-                        vertices.push(vertex)
-                    }
-                } else {
-                    // Not Skinned
-                    let vertex_size = 2;
-                    let vertex_count = mesh_attachment.vertices().len() / vertex_size;
-                    let vertices_data = mesh_attachment.vertices();
-
-                    let uvs = mesh_attachment.uvs();
-
-                    let vertex_offset = vertices.len() as u16;
-
-                    for vertex_index in 0..vertex_count {
-                        let mut positions = [Vec2::ZERO; 4];
-
-                        positions[0] = Vec2::new(
-                            vertices_data[vertex_index * vertex_size],
-                            vertices_data[vertex_index * vertex_size + 1],
-                        );
-
-                        // Get UVs
-                        let uv = unsafe {
-                            [
-                                *uvs.offset(vertex_index as isize * 2),
-                                *uvs.offset(vertex_index as isize * 2 + 1),
-                            ]
-                        };
-
-                        let vertex = Vertex {
-                            positions,
-                            bone_weights: [1.0, 0.0, 0.0, 0.0], // Only influenced by one bone
-                            bone_indices: [bone_index as u32; 4],
-                            color: mesh_attachment.color().into(),
-                            uv: uv.into(),
-                        };
-
-                        vertices.push(vertex);
-                    }
-                }
-
-                let index_count = mesh_attachment.triangles_count() as usize;
-                let indices_data = mesh_attachment.triangles();
-                let vertex_offset = v0 as u32;
-
-                unsafe {
-                    let indices_slice = std::slice::from_raw_parts(indices_data, index_count);
-                    indices.extend(indices_slice.iter().map(|&i| vertex_offset + i as u32));
+                    attachments.insert(attachment_name.clone(), attachment_meta);
                 }
             }
-
-            let metadata = SlotMeta {
-                index_start: i0,
-                index_count: (indices.len() as i32 - i0),
-            };
-
-            slot_meta.insert(slot_index, metadata);
         }
 
-        (vertices, indices, slot_meta)
+        (vertices, indices, attachments)
     }
 }

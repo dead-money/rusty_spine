@@ -8,12 +8,13 @@ pub use pipeline::*;
 pub use spine::*;
 pub use texture::*;
 
-use glam::{Mat4, Vec2};
+use glam::{Mat4, Vec2, Vec3};
 use miniquad::*;
-use rusty_spine::{AttachmentType, Physics};
+use rusty_spine::{AttachmentType, Physics, Skeleton};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
+    time::{Duration, Instant},
     vec,
 };
 
@@ -43,25 +44,28 @@ struct Stage {
     current_spine_demo: usize,
     pipeline: Pipeline,
     last_frame_time: f64,
-    // bindings: Bindings,
     texture_delete_queue: Arc<Mutex<Vec<Texture>>>,
     screen_size: Vec2,
+    grid_size: usize,
+    last_fps_print: f64,
+    frame_count: u32,
+    fps: f64,
 }
 
 impl Stage {
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
-            // SpineDemo {
-            //     atlas_path: "assets/spineboy/export/spineboy.atlas",
-            //     skeleton_path: SpineSkeletonPath::Binary(
-            //         "assets/spineboy/export/spineboy-pro.skel",
-            //     ),
-            //     animation: "portal",
-            //     position: Vec2::new(0., -220.),
-            //     scale: 0.5,
-            //     skin: None,
-            //     backface_culling: true,
-            // },
+            SpineDemo {
+                atlas_path: "assets/spineboy/export/spineboy.atlas",
+                skeleton_path: SpineSkeletonPath::Binary(
+                    "assets/spineboy/export/spineboy-pro.skel",
+                ),
+                animation: "portal",
+                position: Vec2::new(0., -220.),
+                scale: 0.5,
+                skin: None,
+                backface_culling: true,
+            },
             SpineDemo {
                 atlas_path: "assets/alien/export/alien.atlas",
                 skeleton_path: SpineSkeletonPath::Json("assets/alien/export/alien-pro.json"),
@@ -97,6 +101,10 @@ impl Stage {
             // bindings,
             texture_delete_queue,
             screen_size: Vec2::new(800., 600.),
+            grid_size: 1,
+            last_fps_print: date::now(),
+            frame_count: 0,
+            fps: 0.0,
         }
     }
 
@@ -129,9 +137,9 @@ impl Stage {
                 continue;
             };
 
-            if !slot.bone().active() {
-                continue;
-            }
+            // if !slot.bone().active() {
+            //     continue;
+            // }
 
             let Some(attachment) = slot.attachment() else {
                 continue;
@@ -207,61 +215,47 @@ impl Stage {
             1.,
         )
     }
-}
 
-impl EventHandler for Stage {
-    fn update(&mut self, _ctx: &mut Context) {
-        let now = date::now();
-        let dt = ((now - self.last_frame_time) as f32).max(0.001);
-        self.spine.controller.update(dt, Physics::Update);
-        self.last_frame_time = now;
+    pub fn create_view_transform(&self, row: usize, col: usize) -> Mat4 {
+        let grid_size = Vec2::splat(self.grid_size as f32);
+
+        // Calculate the size of each cell in the grid
+        let cell_size = self.screen_size / grid_size;
+
+        // Calculate the position of the current cell
+        let cell_position = Vec2::new(col as f32 * cell_size.x, row as f32 * cell_size.y);
+
+        // Calculate the center of the current cell
+        let cell_center = cell_position + cell_size * 0.75;
+
+        // Create the orthographic projection
+        let ortho = self.view();
+
+        // Create a translation matrix to move to the cell center
+        let translation = Mat4::from_translation(Vec3::new(
+            cell_center.x - self.screen_size.x * 0.5,
+            cell_center.y - self.screen_size.y * 0.5,
+            0.0,
+        ));
+
+        // Create a scale matrix to fit the content into the cell
+        let scale = Mat4::from_scale(Vec3::new(1.0 / grid_size.x, 1.0 / grid_size.y, 1.0));
+
+        // Combine the transformations
+        ortho * translation * scale
     }
 
-    fn draw(&mut self, ctx: &mut Context) {
-        self.ensure_textures_loaded(ctx);
-
-        // Delete textures that are no longer used. The delete call needs to happen here, before
-        // rendering, or it may not actually delete the texture.
-        for texture_delete in self.texture_delete_queue.lock().unwrap().drain(..) {
-            texture_delete.delete();
-        }
-
-        ctx.begin_default_pass(Default::default());
-        ctx.clear(Some((0.1, 0.1, 0.1, 1.0)), None, None);
-        ctx.apply_pipeline(&self.pipeline);
-
-        // Spine data is clockwise by default!
-        ctx.set_cull_face(self.spine.cull_face);
-
-        let skeleton = &self.spine.controller.skeleton;
-
-        // Extract bone transforms from the skeleton.
-        let mut bones = [Mat4::IDENTITY; 100];
-        for bone in skeleton.bones() {
-            let bone_index = bone.data().index();
-
-            let transform = Mat4::from_cols_array_2d(&[
-                [bone.a(), bone.b(), 0.0, 0.0],
-                [bone.c(), bone.d(), 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [bone.world_x(), bone.world_y(), 0.0, 1.0],
-            ]);
-
-            bones[bone_index] = transform;
-        }
-
-        ctx.apply_uniforms(&Uniforms {
-            world: self.spine.world,
-            view: self.view(),
-            bones,
-        });
-
+    fn render_scene(&self, ctx: &mut Context, skeleton: &Skeleton, mut uniforms: Uniforms) {
         for slot_index in 0..skeleton.slots_count() {
             let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
                 continue;
             };
 
-            let slot_name = slot.data().name().to_string();
+            let Some(attachment) = slot.attachment() else {
+                continue;
+            };
+
+            let attachment_name = attachment.name();
 
             let BlendStates {
                 alpha_blend,
@@ -275,36 +269,18 @@ impl EventHandler for Stage {
             let bone = slot.bone();
             let bone_index = bone.data().index();
 
-            if !bone.active() {
-                continue;
-            }
-
-            // Find the buffer metadata for this slot.
-            let Some(slot_meta) = self.spine.buffers.slot_meta.get(&slot_index) else {
-                continue;
-            };
-
-            let Some(attachment) = slot.attachment() else {
+            // Find the buffer metadata for this slot
+            let Some(attachment_meta) = self.spine.buffers.attachments.get(attachment_name) else {
                 continue;
             };
 
             let renderer_object = unsafe {
-                match attachment.attachment_type() {
-                    AttachmentType::Region => {
-                        if let Some(region_attachment) = attachment.as_region() {
-                            Some(region_attachment.renderer_object_exact())
-                        } else {
-                            None
-                        }
-                    }
-                    AttachmentType::Mesh => {
-                        if let Some(mesh_attachment) = attachment.as_mesh() {
-                            Some(mesh_attachment.renderer_object_exact())
-                        } else {
-                            None
-                        }
-                    }
-                    _ => None,
+                if let Some(region_attachment) = attachment.as_region() {
+                    Some(region_attachment.renderer_object_exact())
+                } else if let Some(mesh_attachment) = attachment.as_mesh() {
+                    Some(mesh_attachment.renderer_object_exact())
+                } else {
+                    continue;
                 }
             };
 
@@ -314,23 +290,89 @@ impl EventHandler for Stage {
 
             let spine_texture = unsafe { &mut *(renderer_object as *mut SpineTexture) };
 
-            let bindings = if let SpineTexture::Loaded(texture) = spine_texture {
-                Bindings {
+            if let SpineTexture::Loaded(texture) = spine_texture {
+                let bindings = Bindings {
                     vertex_buffers: vec![self.spine.buffers.vertex_buffer],
                     index_buffer: self.spine.buffers.index_buffer,
                     images: vec![*texture],
-                }
-            } else {
-                continue;
-            };
+                };
+                ctx.apply_bindings(&bindings);
 
-            ctx.apply_bindings(&bindings);
+                uniforms.bone_index = if attachment_meta.uses_current_bone {
+                    bone_index as i32
+                } else {
+                    -1
+                };
+                ctx.apply_uniforms(&uniforms);
 
-            // let bone_transform = bones[bone_index];
-            // println!("bone_transform: {:?} {}", bone_transform, bone_index);
-            // println!("slot meta: {:?}", slot_meta);
+                ctx.draw(attachment_meta.index_start, attachment_meta.index_count, 1);
+            }
+        }
+    }
+}
 
-            ctx.draw(slot_meta.index_start, slot_meta.index_count, 1);
+impl EventHandler for Stage {
+    fn update(&mut self, _ctx: &mut Context) {
+        let now = date::now();
+        let dt = ((now - self.last_frame_time) as f32).max(0.001);
+        self.spine.controller.update(dt, Physics::Update);
+
+        if (date::now() - self.last_fps_print) >= 0.5 {
+            println!(
+                "{:.2} FPS -- {} Spines",
+                1.0 / dt,
+                self.grid_size * self.grid_size
+            );
+            self.last_fps_print = date::now();
+        }
+
+        self.last_frame_time = now;
+    }
+
+    fn draw(&mut self, ctx: &mut Context) {
+        self.ensure_textures_loaded(ctx);
+
+        // Delete textures that are no longer used
+        for texture_delete in self.texture_delete_queue.lock().unwrap().drain(..) {
+            texture_delete.delete();
+        }
+
+        ctx.begin_default_pass(Default::default());
+        ctx.clear(Some((0.1, 0.1, 0.1, 1.0)), None, None);
+        ctx.apply_pipeline(&self.pipeline);
+
+        ctx.set_cull_face(self.spine.cull_face);
+
+        let skeleton = &self.spine.controller.skeleton;
+
+        // Extract bone transforms from the skeleton
+        let mut bones = [Mat4::IDENTITY; 100];
+        for bone in skeleton.bones() {
+            let bone_index = bone.data().index();
+            let transform = Mat4::from_cols_array_2d(&[
+                [bone.a(), bone.c(), 0.0, 0.0],
+                [bone.b(), bone.d(), 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [bone.world_x(), bone.world_y(), 0.0, 1.0],
+            ]);
+            bones[bone_index] = transform;
+        }
+
+        for row in 0..self.grid_size {
+            for col in 0..self.grid_size {
+                let cell_view = self.view();
+                // let cell_view = self.create_view_transform(row, col);
+
+                let uniforms = Uniforms {
+                    world: Mat4::IDENTITY,
+                    view: cell_view,
+                    bones,
+                    bone_index: -1,
+                };
+
+                // Render the scene for this grid cell
+                self.render_scene(ctx, skeleton, uniforms);
+            }
         }
 
         ctx.end_render_pass();
@@ -340,24 +382,37 @@ impl EventHandler for Stage {
     fn resize_event(&mut self, ctx: &mut Context, width: f32, height: f32) {
         self.screen_size = Vec2::new(width, height) / ctx.dpi_scale();
     }
+
+    fn key_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        keycode: KeyCode,
+        _keymods: KeyMods,
+        _repeat: bool,
+    ) {
+        match keycode {
+            KeyCode::Equal | KeyCode::KpAdd => {
+                self.grid_size = (self.grid_size + 1).min(100);
+            }
+            KeyCode::Minus | KeyCode::KpSubtract => {
+                self.grid_size = (self.grid_size - 1).max(1);
+            }
+            _ => {}
+        }
+    }
 }
 
-const MAX_MESH_VERTICES: usize = 10000;
-const MAX_MESH_INDICES: usize = 20000;
-const MAX_BONES: usize = 200;
-
 #[derive(Debug)]
-pub struct SlotMeta {
-    // pub vertex_start: u32,
-    // pub vertex_count: u32,
+pub struct AttachmentMeta {
     pub index_start: i32,
     pub index_count: i32,
+    pub uses_current_bone: bool,
 }
 
 pub struct SkeletonBuffers {
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub slot_meta: HashMap<usize, SlotMeta>,
+    pub attachments: HashMap<String, AttachmentMeta>,
 }
 
 /// An instance of this enum is created for each loaded [`rusty_spine::atlas::AtlasPage`] upon

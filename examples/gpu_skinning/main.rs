@@ -57,6 +57,26 @@ struct Stage {
 impl Stage {
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
+            // works perfectly?
+            SpineDemo {
+                atlas_path: "assets/cloud-pot/export/cloud-pot.atlas",
+                skeleton_path: SpineSkeletonPath::Json("assets/cloud-pot/export/cloud-pot.json"),
+                animation: "playing-in-the-rain",
+                position: Vec2::new(0., -220.),
+                scale: 0.4,
+                skin: None,
+                backface_culling: true,
+            },
+            // goblin is invis?
+            SpineDemo {
+                atlas_path: "assets/goblins/export/goblins.atlas",
+                skeleton_path: SpineSkeletonPath::Json("assets/goblins/export/goblins-pro.json"),
+                animation: "walk",
+                position: Vec2::new(0., -200.),
+                scale: 1.,
+                skin: Some("goblingirl"),
+                backface_culling: true,
+            },
             SpineDemo {
                 atlas_path: "assets/spineboy/export/spineboy.atlas",
                 skeleton_path: SpineSkeletonPath::Binary(
@@ -68,6 +88,7 @@ impl Stage {
                 skin: None,
                 backface_culling: true,
             },
+            // uniforms too small
             // SpineDemo {
             //     atlas_path: "assets/windmill/export/windmill.atlas",
             //     skeleton_path: SpineSkeletonPath::Json("assets/windmill/export/windmill-ess.json"),
@@ -77,6 +98,7 @@ impl Stage {
             //     skin: None,
             //     backface_culling: true,
             // },
+            // deform wrong?
             SpineDemo {
                 atlas_path: "assets/alien/export/alien.atlas",
                 skeleton_path: SpineSkeletonPath::Json("assets/alien/export/alien-pro.json"),
@@ -97,6 +119,26 @@ impl Stage {
             //     skin: None,
             //     backface_culling: true,
             // },
+            // has atlas region crash
+            // SpineDemo {
+            //     atlas_path: "assets/dragon/export/dragon.atlas",
+            //     skeleton_path: SpineSkeletonPath::Json("assets/dragon/export/dragon-ess.json"),
+            //     animation: "flying",
+            //     position: Vec2::new(0., -50.),
+            //     scale: 0.7,
+            //     skin: None,
+            //     backface_culling: true,
+            // },
+            // need clipping and dark color
+            SpineDemo {
+                atlas_path: "assets/coin/export/coin-pma.atlas",
+                skeleton_path: SpineSkeletonPath::Json("assets/coin/export/coin-pro.json"),
+                animation: "animation",
+                position: Vec2::ZERO,
+                scale: 1.,
+                skin: None,
+                backface_culling: false,
+            },
         ];
 
         let current_spine_demo = 0;
@@ -381,6 +423,7 @@ impl EventHandler for Stage {
 
         for row in 0..self.grid_size {
             for col in 0..self.grid_size {
+                uniforms.view = self.create_view_transform(row, col);
                 ctx.apply_uniforms(&uniforms);
 
                 // Render the scene for this grid cell

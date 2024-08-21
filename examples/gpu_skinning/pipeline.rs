@@ -28,8 +28,9 @@ impl Vertex {
     }
 }
 
+pub const BONES: usize = 75;
 pub const DEFORM_SIZE: usize = 400;
-pub const DEFORM_OFFSETS: usize = 50;
+pub const DEFORM_OFFSETS: usize = 75;
 pub const ATTACHMENT_SLOTS: usize = 80;
 pub const SLOT_BONES: usize = 80;
 
@@ -37,7 +38,7 @@ pub const SLOT_BONES: usize = 80;
 pub struct Uniforms {
     pub world: Mat4,
     pub view: Mat4,
-    pub bones: [Mat4; 100],
+    pub bones: [Mat4; BONES],
     pub deform: [f32; DEFORM_SIZE * 2],
     pub deform_offsets: [i32; DEFORM_OFFSETS],
     pub attachment_slots: [i32; ATTACHMENT_SLOTS],
@@ -49,7 +50,7 @@ impl Uniforms {
         vec![
             UniformDesc::new("world", UniformType::Mat4),
             UniformDesc::new("view", UniformType::Mat4),
-            UniformDesc::new("bones", UniformType::Mat4).array(100),
+            UniformDesc::new("bones", UniformType::Mat4).array(BONES),
             UniformDesc::new("deform", UniformType::Float2).array(DEFORM_SIZE),
             UniformDesc::new("deform_offsets", UniformType::Int1).array(DEFORM_OFFSETS),
             UniformDesc::new("attachment_slots", UniformType::Int1).array(ATTACHMENT_SLOTS),
@@ -77,14 +78,14 @@ const VERTEX: &str = r#"
         // Not enough uniform space for a dark color lookup table?
 
         // The transform matrices for each bone.
-        uniform mat4 bones[100];
+        uniform mat4 bones[75];
 
         // The per-slot deform vertices.
         uniform vec2 deform[400];
 
         // A map of the slot index to the offset in the deform array.
         // If the value is -1 then the slot is not deformed.
-        uniform int deform_offsets[50];
+        uniform int deform_offsets[75];
 
         // A map of the attachment index to a slot index.
         // This can be used to find an index into the deform_offsets array.

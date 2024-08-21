@@ -17,6 +17,9 @@ use std::{
     vec,
 };
 
+// I think I've hit the limits of what I can do with miniquad.
+// Too much use of uniforms is causing shader issues. Probably need SSBOs.
+
 fn main() {
     rusty_spine::extension::set_create_texture_cb(example_create_texture_cb);
 
@@ -54,13 +57,22 @@ struct Stage {
 impl Stage {
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
+            SpineDemo {
+                atlas_path: "assets/spineboy/export/spineboy.atlas",
+                skeleton_path: SpineSkeletonPath::Binary(
+                    "assets/spineboy/export/spineboy-pro.skel",
+                ),
+                animation: "portal",
+                position: Vec2::new(0., -220.),
+                scale: 0.5,
+                skin: None,
+                backface_culling: true,
+            },
             // SpineDemo {
-            //     atlas_path: "assets/spineboy/export/spineboy.atlas",
-            //     skeleton_path: SpineSkeletonPath::Binary(
-            //         "assets/spineboy/export/spineboy-pro.skel",
-            //     ),
-            //     animation: "portal",
-            //     position: Vec2::new(0., -220.),
+            //     atlas_path: "assets/windmill/export/windmill.atlas",
+            //     skeleton_path: SpineSkeletonPath::Json("assets/windmill/export/windmill-ess.json"),
+            //     animation: "animation",
+            //     position: Vec2::new(0., -80.),
             //     scale: 0.5,
             //     skin: None,
             //     backface_culling: true,
@@ -74,6 +86,17 @@ impl Stage {
                 skin: None,
                 backface_culling: true,
             },
+            // SpineDemo {
+            //     atlas_path: "assets/celestial-circus/export/celestial-circus-pma.atlas",
+            //     skeleton_path: SpineSkeletonPath::Json(
+            //         "assets/celestial-circus/export/celestial-circus-pro.json",
+            //     ),
+            //     animation: "swing",
+            //     position: Vec2::new(0., -120.),
+            //     scale: 0.2,
+            //     skin: None,
+            //     backface_culling: true,
+            // },
         ];
 
         let current_spine_demo = 0;
@@ -288,7 +311,7 @@ impl EventHandler for Stage {
         let skeleton = &self.spine.controller.skeleton;
 
         // Extract bone transforms from the skeleton.
-        let mut bones = [Mat4::IDENTITY; 100];
+        let mut bones = [Mat4::IDENTITY; BONES];
         for bone in skeleton.bones() {
             let bone_index = bone.data().index();
 
@@ -375,10 +398,10 @@ impl EventHandler for Stage {
 
     fn key_down_event(
         &mut self,
-        _ctx: &mut Context,
+        ctx: &mut Context,
         keycode: KeyCode,
         _keymods: KeyMods,
-        _repeat: bool,
+        repeat: bool,
     ) {
         match keycode {
             KeyCode::Equal | KeyCode::KpAdd => {
@@ -388,6 +411,11 @@ impl EventHandler for Stage {
                 self.grid_size = (self.grid_size - 1).max(1);
             }
             _ => {}
+        }
+
+        if !repeat && keycode == KeyCode::Space {
+            self.current_spine_demo = (self.current_spine_demo + 1) % self.spine_demos.len();
+            self.spine = Spine::load(ctx, self.spine_demos[self.current_spine_demo]);
         }
     }
 }

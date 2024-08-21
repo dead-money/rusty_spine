@@ -205,7 +205,7 @@ const FRAGMENT: &str = r#"
         void main() {
             vec4 tex_color = texture(tex, v_uv);
             fragColor = v_color * tex_color;
-            // fragColor = vec4(1.0, 0.0, 0.0, 1.0);
+            //  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
         }
     "#;
 

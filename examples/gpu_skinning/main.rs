@@ -8,7 +8,7 @@ pub use pipeline::*;
 pub use spine::*;
 pub use texture::*;
 
-use glam::{Mat4, Vec2, Vec3};
+use glam::{Mat4, Quat, Vec2, Vec3};
 use miniquad::*;
 use rusty_spine::{AttachmentType, Physics, Skeleton};
 use std::{
@@ -60,9 +60,7 @@ impl Stage {
                     "assets/spineboy/export/spineboy-pro.skel",
                 ),
                 animation: "portal",
-                // position: Vec2::new(0., -220.),
-                // scale: 0.5,
-                position: Vec2::new(-200., -300.),
+                position: Vec2::new(0., -220.),
                 scale: 0.5,
                 skin: None,
                 backface_culling: true,
@@ -293,7 +291,8 @@ impl EventHandler for Stage {
         ctx.clear(Some((0.1, 0.1, 0.1, 1.0)), None, None);
         ctx.apply_pipeline(&self.pipeline);
 
-        ctx.set_cull_face(self.spine.cull_face);
+        // ctx.set_cull_face(self.spine.cull_face);
+        ctx.set_cull_face(CullFace::Nothing);
 
         let skeleton = &self.spine.controller.skeleton;
 
@@ -301,12 +300,14 @@ impl EventHandler for Stage {
         let mut bones = [Mat4::IDENTITY; 100];
         for bone in skeleton.bones() {
             let bone_index = bone.data().index();
+
             let transform = Mat4::from_cols_array_2d(&[
                 [bone.a(), bone.c(), 0.0, 0.0],
                 [bone.b(), bone.d(), 0.0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
                 [bone.world_x(), bone.world_y(), 0.0, 1.0],
             ]);
+
             bones[bone_index] = transform;
         }
 
@@ -367,7 +368,7 @@ impl EventHandler for Stage {
 
         for row in 0..self.grid_size {
             for col in 0..self.grid_size {
-                uniforms.view = self.create_view_transform(row, col);
+                // uniforms.view = self.create_view_transform(row, col);
                 ctx.apply_uniforms(&uniforms);
 
                 // Render the scene for this grid cell

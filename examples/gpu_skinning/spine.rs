@@ -63,7 +63,7 @@ impl Spine {
             .set_animation_by_name(0, info.animation, true)
             .unwrap_or_else(|_| panic!("failed to start animation: {}", info.animation));
 
-        // controller.animation_state.set_timescale(0.25);
+        controller.animation_state.set_timescale(0.1);
 
         controller.settings.premultiplied_alpha = premultiplied_alpha;
 
@@ -106,15 +106,23 @@ impl Spine {
         let attachment_type = 0;
         let attachment_info = [attachment_index, attachment_type, 0, 0];
 
-        for _ in 0..4 {
-            positions[0] = Vec2::new(offsets[offset_cursor], offsets[offset_cursor + 1]);
+        // why??
+        let uv_order = [1, 2, 3, 0];
+
+        for i in 0..4 {
+            let px = offsets[i * 2];
+            let py = offsets[i * 2 + 1];
+
+            let uv_index = uv_order[i] * 2;
+            let mut u = uvs[uv_index];
+            let mut v = uvs[uv_index + 1];
 
             vertices.push(Vertex {
-                positions,
+                positions: [Vec2::new(px, py); 4],
                 bone_weights: [1.0, 0.0, 0.0, 0.0],
-                bone_indices: [0; 4], // Will be influenced by the bone of the slot it is attached to.
+                bone_indices: [0; 4],
                 color: attachment.color().into(),
-                uv: [uvs[offset_cursor], uvs[offset_cursor + 1]].into(),
+                uv: [u, v].into(),
                 attachment_info,
             });
 

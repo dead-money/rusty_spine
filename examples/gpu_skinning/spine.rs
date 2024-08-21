@@ -257,6 +257,8 @@ impl Spine {
                         index_start: i0,
                         index_count: (indices.len() as i32) - i0,
                         uses_current_bone: true,
+                        is_weighted: 0,
+                        is_mesh: 0,
                     };
 
                     attachments.insert(attachment_name.clone(), attachment_meta);
@@ -264,7 +266,9 @@ impl Spine {
 
                 if let Some(mesh_attachment) = attachment.as_mesh() {
                     let mut uses_current_bone = false;
+                    let mut is_weighted = 0;
                     let (attachment_vertices, attachment_indices) = if mesh_attachment.has_bones() {
+                        is_weighted = 1;
                         Self::build_skinned_attachment(&mesh_attachment, v0)
                     } else {
                         uses_current_bone = true;
@@ -278,6 +282,8 @@ impl Spine {
                         index_start: i0,
                         index_count: (indices.len() as i32) - i0,
                         uses_current_bone,
+                        is_weighted,
+                        is_mesh: 1,
                     };
 
                     attachments.insert(attachment_name.clone(), attachment_meta);

@@ -189,6 +189,8 @@ impl Slot {
     c_accessor!(sequence_index, sequenceIndex, usize);
 
     // TODO: accessors for deform
+    c_accessor!(deform_count, deformCount, i32);
+    c_accessor_passthrough!(deform, deform, *mut f32);
 }
 
 c_handle_decl!(

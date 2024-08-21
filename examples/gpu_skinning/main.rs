@@ -14,7 +14,6 @@ use rusty_spine::{AttachmentType, Physics, Skeleton};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
     vec,
 };
 
@@ -55,23 +54,25 @@ struct Stage {
 impl Stage {
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
-            SpineDemo {
-                atlas_path: "assets/spineboy/export/spineboy.atlas",
-                skeleton_path: SpineSkeletonPath::Binary(
-                    "assets/spineboy/export/spineboy-pro.skel",
-                ),
-                animation: "portal",
-                position: Vec2::new(0., -220.),
-                scale: 0.5,
-                skin: None,
-                backface_culling: true,
-            },
+            // SpineDemo {
+            //     atlas_path: "assets/spineboy/export/spineboy.atlas",
+            //     skeleton_path: SpineSkeletonPath::Binary(
+            //         "assets/spineboy/export/spineboy-pro.skel",
+            //     ),
+            //     animation: "portal",
+            //     // position: Vec2::new(0., -220.),
+            //     // scale: 0.5,
+            //     position: Vec2::new(-200., -300.),
+            //     scale: 0.5,
+            //     skin: None,
+            //     backface_culling: true,
+            // },
             SpineDemo {
                 atlas_path: "assets/alien/export/alien.atlas",
                 skeleton_path: SpineSkeletonPath::Json("assets/alien/export/alien-pro.json"),
                 animation: "death",
-                position: Vec2::new(0., -260.),
-                scale: 0.3,
+                position: Vec2::new(-300., -300.),
+                scale: 0.4,
                 skin: None,
                 backface_culling: true,
             },
@@ -81,16 +82,6 @@ impl Stage {
         let spine = Spine::load(ctx, spine_demos[current_spine_demo]);
 
         let pipeline = Self::create_pipeline(ctx);
-
-        // let mut text_system = text::TextSystem::new();
-        // let demo_text =
-        //     text_system.create_text(ctx, "press space for next demo", 32. * ctx.dpi_scale());
-
-        // let bindings = Bindings {
-        //     vertex_buffers: vec![spine.buffers.vertex_buffer],
-        //     index_buffer: spine.buffers.index_buffer,
-        //     images: vec![Texture::empty()],
-        // };
 
         Stage {
             spine,
@@ -136,10 +127,6 @@ impl Stage {
             let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
                 continue;
             };
-
-            // if !slot.bone().active() {
-            //     continue;
-            // }
 
             let Some(attachment) = slot.attachment() else {
                 continue;
@@ -291,6 +278,10 @@ impl Stage {
             let spine_texture = unsafe { &mut *(renderer_object as *mut SpineTexture) };
 
             if let SpineTexture::Loaded(texture) = spine_texture {
+                let deform_count = slot.deform_count();
+                let slot_deform = slot.deform();
+                println!("deform_count: {}", deform_count);
+
                 let bindings = Bindings {
                     vertex_buffers: vec![self.spine.buffers.vertex_buffer],
                     index_buffer: self.spine.buffers.index_buffer,
@@ -303,6 +294,13 @@ impl Stage {
                 } else {
                     -1
                 };
+
+                uniforms.is_deformed = (deform_count > 0) as u32;
+                uniforms.is_weighted = attachment_meta.is_weighted;
+                uniforms.is_mesh = attachment_meta.is_mesh;
+
+                uniforms.deform = copy_buffer_to_array(slot_deform, deform_count as usize);
+
                 ctx.apply_uniforms(&uniforms);
 
                 ctx.draw(attachment_meta.index_start, attachment_meta.index_count, 1);
@@ -360,14 +358,17 @@ impl EventHandler for Stage {
 
         for row in 0..self.grid_size {
             for col in 0..self.grid_size {
-                let cell_view = self.view();
-                // let cell_view = self.create_view_transform(row, col);
+                let cell_view = self.create_view_transform(row, col);
 
                 let uniforms = Uniforms {
-                    world: Mat4::IDENTITY,
+                    world: self.spine.world,
                     view: cell_view,
                     bones,
                     bone_index: -1,
+                    deform: [0.0; 400],
+                    is_deformed: 0,
+                    is_weighted: 0,
+                    is_mesh: 0,
                 };
 
                 // Render the scene for this grid cell
@@ -407,6 +408,8 @@ pub struct AttachmentMeta {
     pub index_start: i32,
     pub index_count: i32,
     pub uses_current_bone: bool,
+    pub is_weighted: u32,
+    pub is_mesh: u32,
 }
 
 pub struct SkeletonBuffers {
@@ -441,4 +444,19 @@ pub struct SpineDemo {
 pub enum SpineSkeletonPath {
     Binary(&'static str),
     Json(&'static str),
+}
+
+fn copy_buffer_to_array(buffer: *const f32, count: usize) -> [f32; 400] {
+    if buffer.is_null() {
+        return [1.0; 400];
+    }
+
+    let mut result = [1.0; 400];
+    let elements_to_copy = std::cmp::min(count, 400);
+
+    unsafe {
+        std::ptr::copy_nonoverlapping(buffer, result.as_mut_ptr(), elements_to_copy);
+    }
+
+    result
 }

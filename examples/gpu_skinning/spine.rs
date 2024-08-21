@@ -103,17 +103,19 @@ impl Spine {
 
         let mut positions = [Vec2::ZERO; 4];
 
+        let attachment_type = 0;
+        let attachment_info = [attachment_index, attachment_type, 0, 0];
+
         for _ in 0..4 {
             positions[0] = Vec2::new(offsets[offset_cursor], offsets[offset_cursor + 1]);
 
             vertices.push(Vertex {
                 positions,
-                bone_weights: [10.0, 0.0, 0.0, 0.0],
+                bone_weights: [1.0, 0.0, 0.0, 0.0],
                 bone_indices: [0; 4], // Will be influenced by the bone of the slot it is attached to.
                 color: attachment.color().into(),
                 uv: [uvs[offset_cursor], uvs[offset_cursor + 1]].into(),
-                // attachment_index,
-                // attachment_type: 0,
+                attachment_info,
             });
 
             offset_cursor += 2;
@@ -139,6 +141,9 @@ impl Spine {
         let mut vertices = Vec::with_capacity(vertex_count);
         let mut indices = Vec::new();
 
+        let attachment_type = 2;
+        let attachment_info = [attachment_index, attachment_type, 0, 0];
+
         for vertex_index in 0..vertex_count {
             let bone_count = bones_data[bones_cursor] as usize;
             bones_cursor += 1;
@@ -151,7 +156,7 @@ impl Spine {
                 let x = vertices_data[vertices_cursor];
                 let y = vertices_data[vertices_cursor + 1];
                 let w = vertices_data[vertices_cursor + 2];
-                let b = bones_data[bones_cursor];
+                let b = bones_data[bones_cursor] as u32;
                 vertices_cursor += 3;
 
                 positions[j] = Vec2::new(x, y);
@@ -174,8 +179,7 @@ impl Spine {
                 bone_indices,
                 color: attachment.color().into(),
                 uv: uv.into(),
-                // attachment_index,
-                // attachment_type: 2,
+                attachment_info,
             };
 
             vertices.push(vertex)
@@ -207,6 +211,9 @@ impl Spine {
         let mut vertices = Vec::with_capacity(vertex_count);
         let mut indices = Vec::new();
 
+        let attachment_type = 1;
+        let attachment_info = [attachment_index, attachment_type, 0, 0];
+
         for vertex_index in 0..vertex_count {
             let mut positions = [Vec2::ZERO; 4];
 
@@ -225,11 +232,10 @@ impl Spine {
             let vertex = Vertex {
                 positions,
                 bone_weights: [1.0, 0.0, 0.0, 0.0], // Only influenced by one bone
-                bone_indices: [0; 4],
+                bone_indices: [0; 4], // Will be influenced by the bone of the slot it is attached to.
                 color: attachment.color().into(),
                 uv: uv.into(),
-                // attachment_index,
-                // attachment_type: 1,
+                attachment_info,
             };
 
             vertices.push(vertex);
@@ -256,11 +262,14 @@ impl Spine {
         let mut indices: Vec<u32> = Vec::new();
         let mut attachments = HashMap::new();
 
+        let mut attachment_index = 0;
+
         for skin in skeleton.data().skins() {
             for attachment in skin.attachments() {
+                attachment_index += 1;
+
                 let attachment = &attachment.attachment;
                 let attachment_name = attachment.name().to_string();
-                let attachment_index = attachments.len() as i32;
 
                 let i0 = indices.len() as i32;
                 let v0 = vertices.len() as u32;
@@ -282,13 +291,9 @@ impl Spine {
                 }
 
                 if let Some(mesh_attachment) = attachment.as_mesh() {
-                    let mut uses_current_bone = false;
-                    let mut is_weighted = 0;
                     let (attachment_vertices, attachment_indices) = if mesh_attachment.has_bones() {
-                        is_weighted = 1;
                         Self::build_skinned_attachment(&mesh_attachment, v0, attachment_index)
                     } else {
-                        uses_current_bone = true;
                         Self::build_mesh_attachment(&mesh_attachment, v0, attachment_index)
                     };
 

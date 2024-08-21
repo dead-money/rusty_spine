@@ -63,8 +63,6 @@ impl Spine {
             .set_animation_by_name(0, info.animation, true)
             .unwrap_or_else(|_| panic!("failed to start animation: {}", info.animation));
 
-        controller.animation_state.set_timescale(0.1);
-
         controller.settings.premultiplied_alpha = premultiplied_alpha;
 
         let (vertices, indices, attachments) = Self::build_skeleton_buffers(&controller.skeleton);
@@ -112,6 +110,7 @@ impl Spine {
             let v = uvs[uv_index + 1];
 
             let attachment_info = [attachment_index, attachment_type, i as i32, 0];
+            println!("attachment_info: {:?}", attachment_info);
 
             vertices.push(Vertex {
                 positions: [Vec2::new(px, py); 4],
@@ -175,6 +174,7 @@ impl Spine {
             };
 
             let attachment_info = [attachment_index, attachment_type, vertex_index as i32, 0];
+            println!("attachment_info: {:?}", attachment_info);
 
             let vertex = Vertex {
                 positions,
@@ -232,6 +232,7 @@ impl Spine {
             };
 
             let attachment_info = [attachment_index, attachment_type, vertex_index as i32, 0];
+            println!("attachment_info: {:?}", attachment_info);
 
             let vertex = Vertex {
                 positions,

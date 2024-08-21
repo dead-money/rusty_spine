@@ -89,9 +89,26 @@ const VERTEX: &str = r#"
         out vec2 v_uv;
         out vec4 v_color;
 
+        vec3 skinned_position(vec4 local_pos[4], int bone_index) {
+            vec3 skinned_pos = vec3(0.0);
+            
+            skinned_pos += (bones[bone_index] * local_pos[0]).xyz * bone_weights[0];
+
+            for (int i=1; i<4; i++) {
+                bone_index = int(bone_indices[i]);
+                skinned_pos += (bones[bone_index] * local_pos[i]).xyz * bone_weights[i];
+            }
+
+            return skinned_pos;
+        }
+
+        vec3 unweighted_deform_position(int deform_offset, int vertex_index) {
+            vec2 deformed_pos = deform[deform_offset + vertex_index];
+            return vec3(deformed_pos, 0.0);
+        }
+
         void main() {
             vec3 skinned_pos = vec3(0.0, 0.0, 0.0);
-            vec4 local_pos = vec4(0.0, 0.0, 0.0, 1.0);
 
             int attachment_index = attachment_info[0];
             int attachment_type = attachment_info[1];
@@ -109,71 +126,30 @@ const VERTEX: &str = r#"
                 bone_index = int(bone_indices[0]);
             }
 
-            // bone_index = 0;
-
-            if (deform_offset == -1) {
-                // No deform data for this slot.
-                // Transform the vertices using the bone data.
-                // vec4 local_pos = vec4(position0, 0.0, 1.0);
-                // skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[0];
-
-            //     bone_index = int(bone_indices[1]);
-            //     local_pos = vec4(position1, 0.0, 1.0);
-            //     skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[1];
-
-            //     bone_index = int(bone_indices[2]);
-            //     local_pos = vec4(position2, 0.0, 1.0);
-            //     skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[2];
-
-            //     bone_index = int(bone_indices[3]);
-            //     local_pos = vec4(position3, 0.0, 1.0);
-            //     skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[3];
-            } else {
+            if (deform_offset > 0) {
                 // The slot has deform vertices.
-                // For an unweighted mesh, these vertices are the final positions.
-                // For a weighted mesh, these vertices are offsets from the original positions.
-
                 if (attachment_type == 2) {
-                    // Weighted mesh.
-                    vec2 deformed_pos[4];
-                    deformed_pos[0] = position0 + deform[deform_offset + vertex_index + 0];
-                    deformed_pos[1] = position0 + deform[deform_offset + vertex_index + 1];
-                    deformed_pos[2] = position0 + deform[deform_offset + vertex_index + 2];
-                    deformed_pos[3] = position0 + deform[deform_offset + vertex_index + 3];
+                    // For a weighted mesh, these vertices are offsets from the original positions.
+                    vec4 local_pos[4];
+                    local_pos[0] = vec4(position0 + deform[deform_offset + vertex_index + 1], 0.0, 1.0);
+                    local_pos[1] = vec4(position1 + deform[deform_offset + vertex_index + 1], 0.0, 1.0);
+                    local_pos[2] = vec4(position2 + deform[deform_offset + vertex_index + 2], 0.0, 1.0);
+                    local_pos[3] = vec4(position3 + deform[deform_offset + vertex_index + 3], 0.0, 1.0);
 
-                    // accessing bone[bone_index] here blows up
-                    local_pos = vec4(deformed_pos[0], 0.0, 1.0);
-                    // skinned_pos = local_pos.xyz * bone_weights[0];
-                    skinned_pos += (bones[0] * local_pos).xyz * bone_weights[0];
-
-                    // bone_index = int(bone_indices[1]);
-                    // local_pos = vec4(deformed_pos[1], 0.0, 1.0);
-                    // skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[1];
-
-                    // Temp Red
-                    v_color = vec4(1.0, 0.0, 0.0, 1.0);
+                    skinned_pos = skinned_position(local_pos, bone_index);
                 } else {
-                    // Unweighted mesh.
-                    vec2 deformed_pos = deform[deform_offset + vertex_index];
-                    skinned_pos = vec3(deformed_pos, 0.0);
+                    // For an unweighted mesh, these vertices are the final positions.
+                    skinned_pos = unweighted_deform_position(deform_offset, vertex_index);
                 }
+            } else {
+                vec4 local_pos[4];
+                local_pos[0] = vec4(position0, 0.0, 1.0);
+                local_pos[1] = vec4(position1, 0.0, 1.0);
+                local_pos[2] = vec4(position2, 0.0, 1.0);
+                local_pos[3] = vec4(position3, 0.0, 1.0);
+
+                skinned_pos = skinned_position(local_pos, bone_index);
             }
-
-            //         vec4 local_pos = vec4(deformed_pos[0], 0.0, 1.0);
-            //         skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[0];
-
-            //         bone_index = bone_indices[1];
-            //         local_pos = vec4(deformed_pos[1], 0.0, 1.0);
-            //         skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[1];
-
-            //         bone_index = bone_indices[2];
-            //         local_pos = vec4(deformed_pos[2], 0.0, 1.0);
-            //         skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[2];
-
-            //         bone_index = bone_indices[3];
-            //         local_pos = vec4(deformed_pos[3], 0.0, 1.0);
-            //         skinned_pos += (bones[bone_index] * local_pos).xyz * bone_weights[3];
-            //         v_color = color;
 
             gl_Position = view * world * vec4(skinned_pos, 1.0);
         }
@@ -193,7 +169,6 @@ const FRAGMENT: &str = r#"
         void main() {
             vec4 tex_color = texture(tex, v_uv);
             fragColor = v_color * tex_color;
-            //  fragColor = vec4(1.0, 0.0, 0.0, 1.0);
         }
     "#;
 

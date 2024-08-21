@@ -8,7 +8,7 @@ pub use pipeline::*;
 pub use spine::*;
 pub use texture::*;
 
-use glam::{Mat4, Quat, Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 use miniquad::*;
 use rusty_spine::{AttachmentType, Physics, Skeleton};
 use std::{
@@ -336,14 +336,13 @@ impl EventHandler for Stage {
         // Extract the deform buffers from the skeleton.
         let mut deform_cursor: usize = 0;
         let mut deform_offsets = [-1 as i32; 100];
-        let mut deform = [0.0; 500];
+        let mut deform = [0.0; 1000];
         for slot in skeleton.slots() {
             let slot_index = slot.data().index();
 
             if slot.deform_count() == 0 {
                 deform_offsets[slot_index] = -1;
             } else {
-                // println!("has deform! {}", slot.data().name());
                 deform_offsets[slot_index] = deform_cursor as i32;
 
                 unsafe {
@@ -353,9 +352,6 @@ impl EventHandler for Stage {
                     std::ptr::copy_nonoverlapping(src, dst.as_mut_ptr(), count);
                     deform_cursor += count;
                 }
-
-                println!("deform offsets: {:?}", deform_offsets);
-                println!("deform: {:?}", deform);
             }
         }
 

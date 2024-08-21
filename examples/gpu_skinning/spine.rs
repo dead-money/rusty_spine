@@ -97,15 +97,10 @@ impl Spine {
         let mut indices = Vec::new();
 
         let offsets = attachment.offset();
-        let mut offset_cursor = 0;
 
         let uvs = attachment.uvs();
-
-        let mut positions = [Vec2::ZERO; 4];
-
         let attachment_type = 0;
 
-        // why??
         let uv_order = [1, 2, 3, 0];
 
         for i in 0..4 {
@@ -113,8 +108,8 @@ impl Spine {
             let py = offsets[i * 2 + 1];
 
             let uv_index = uv_order[i] * 2;
-            let mut u = uvs[uv_index];
-            let mut v = uvs[uv_index + 1];
+            let u = uvs[uv_index];
+            let v = uvs[uv_index + 1];
 
             let attachment_info = [attachment_index, attachment_type, i as i32, 0];
 
@@ -126,8 +121,6 @@ impl Spine {
                 uv: [u, v].into(),
                 attachment_info,
             });
-
-            offset_cursor += 2;
         }
 
         indices.extend_from_slice(&[v0 + 0, v0 + 2, v0 + 3, v0 + 1, v0 + 2, v0 + 0]);

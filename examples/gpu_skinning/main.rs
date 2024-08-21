@@ -54,23 +54,23 @@ struct Stage {
 impl Stage {
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
-            SpineDemo {
-                atlas_path: "assets/spineboy/export/spineboy.atlas",
-                skeleton_path: SpineSkeletonPath::Binary(
-                    "assets/spineboy/export/spineboy-pro.skel",
-                ),
-                animation: "portal",
-                position: Vec2::new(0., -220.),
-                scale: 0.5,
-                skin: None,
-                backface_culling: true,
-            },
+            // SpineDemo {
+            //     atlas_path: "assets/spineboy/export/spineboy.atlas",
+            //     skeleton_path: SpineSkeletonPath::Binary(
+            //         "assets/spineboy/export/spineboy-pro.skel",
+            //     ),
+            //     animation: "portal",
+            //     position: Vec2::new(0., -220.),
+            //     scale: 0.5,
+            //     skin: None,
+            //     backface_culling: true,
+            // },
             SpineDemo {
                 atlas_path: "assets/alien/export/alien.atlas",
                 skeleton_path: SpineSkeletonPath::Json("assets/alien/export/alien-pro.json"),
                 animation: "death",
-                position: Vec2::new(-300., -300.),
-                scale: 0.4,
+                position: Vec2::new(0., -260.),
+                scale: 0.3,
                 skin: None,
                 backface_culling: true,
             },
@@ -336,7 +336,7 @@ impl EventHandler for Stage {
         // Extract the deform buffers from the skeleton.
         let mut deform_cursor: usize = 0;
         let mut deform_offsets = [-1 as i32; 100];
-        let mut deform = [0.0; 10000];
+        let mut deform = [0.0; 500];
         for slot in skeleton.slots() {
             let slot_index = slot.data().index();
 
@@ -353,6 +353,9 @@ impl EventHandler for Stage {
                     std::ptr::copy_nonoverlapping(src, dst.as_mut_ptr(), count);
                     deform_cursor += count;
                 }
+
+                println!("deform offsets: {:?}", deform_offsets);
+                println!("deform: {:?}", deform);
             }
         }
 

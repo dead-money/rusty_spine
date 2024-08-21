@@ -104,7 +104,6 @@ impl Spine {
         let mut positions = [Vec2::ZERO; 4];
 
         let attachment_type = 0;
-        let attachment_info = [attachment_index, attachment_type, 0, 0];
 
         // why??
         let uv_order = [1, 2, 3, 0];
@@ -116,6 +115,8 @@ impl Spine {
             let uv_index = uv_order[i] * 2;
             let mut u = uvs[uv_index];
             let mut v = uvs[uv_index + 1];
+
+            let attachment_info = [attachment_index, attachment_type, i as i32, 0];
 
             vertices.push(Vertex {
                 positions: [Vec2::new(px, py); 4],
@@ -150,7 +151,6 @@ impl Spine {
         let mut indices = Vec::new();
 
         let attachment_type = 2;
-        let attachment_info = [attachment_index, attachment_type, 0, 0];
 
         for vertex_index in 0..vertex_count {
             let bone_count = bones_data[bones_cursor] as usize;
@@ -180,6 +180,8 @@ impl Spine {
                     *uvs.offset(vertex_index as isize * 2 + 1),
                 ]
             };
+
+            let attachment_info = [attachment_index, attachment_type, vertex_index as i32, 0];
 
             let vertex = Vertex {
                 positions,
@@ -220,7 +222,6 @@ impl Spine {
         let mut indices = Vec::new();
 
         let attachment_type = 1;
-        let attachment_info = [attachment_index, attachment_type, 0, 0];
 
         for vertex_index in 0..vertex_count {
             let mut positions = [Vec2::ZERO; 4];
@@ -236,6 +237,8 @@ impl Spine {
                     *uvs.offset(vertex_index as isize * 2 + 1),
                 ]
             };
+
+            let attachment_info = [attachment_index, attachment_type, vertex_index as i32, 0];
 
             let vertex = Vertex {
                 positions,

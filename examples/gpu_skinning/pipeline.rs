@@ -33,7 +33,7 @@ pub struct Uniforms {
     pub world: Mat4,
     pub view: Mat4,
     pub bones: [Mat4; 100],
-    pub deform: [f32; 10000],
+    pub deform: [f32; 500],
     pub deform_offsets: [i32; 100],
     pub attachment_slots: [i32; 100],
     pub slot_bones: [i32; 100],
@@ -45,7 +45,7 @@ impl Uniforms {
             UniformDesc::new("world", UniformType::Mat4),
             UniformDesc::new("view", UniformType::Mat4),
             UniformDesc::new("bones", UniformType::Mat4).array(100),
-            UniformDesc::new("deform", UniformType::Float1).array(10000),
+            UniformDesc::new("deform", UniformType::Float1).array(500),
             UniformDesc::new("deform_offsets", UniformType::Int1).array(100),
             UniformDesc::new("attachment_slots", UniformType::Int1).array(100),
             UniformDesc::new("slot_bones", UniformType::Int1).array(100),
@@ -55,7 +55,7 @@ impl Uniforms {
 }
 
 const VERTEX: &str = r#"
-        #version 300 es
+        #version 460
         in vec2 position0;
         in vec2 position1;
         in vec2 position2;
@@ -73,7 +73,7 @@ const VERTEX: &str = r#"
         uniform mat4 bones[100];
 
         // The per-slot deform vertices.
-        uniform float deform[10000];
+        uniform float deform[500];
 
         // A map of the slot index to the offset in the deform array.
         // If the value is -1 then the slot is not deformed.
@@ -94,10 +94,11 @@ const VERTEX: &str = r#"
 
             int attachment_index = attachment_info[0];
             int attachment_type = attachment_info[1];
+            int vertex_index = attachment_info[2];
 
             int slot_index = attachment_slots[attachment_index];
             int bone_index = slot_bones[slot_index];
-            int deform_offset = deform_offsets[slot_index];
+            int deform_offset = deform_offsets[slot_index] + vertex_index;
 
             if (attachment_type == 2) {
                 // Skinned meshes have multiple bone influences.
@@ -128,6 +129,17 @@ const VERTEX: &str = r#"
                 // For an unweighted mesh, these vertices are the final positions.
                 // For a weighted mesh, these vertices are offsets from the original positions.
                 v_color = vec4(1.0, 0.0, 0.0, 1.0);
+
+                if (attachment_type == 2) {
+                    // Weighted mesh.
+                } else {
+                    // Unweighted mesh.
+                    float d_x = deform[deform_offset];
+                    // float d_y = deform[deform_offset + vertex_index + 1];
+                    // skinned_pos = vec3(d_x, position0.y, 0.0);
+                    // vec2 deform_pos = vec2(deform[0], deform[0 + 1]);
+                    // skinned_pos = vec3(deform_pos, 0.0);
+                }
             }
 
             // int vertex_offset = gl_VertexID * 8; 
@@ -137,13 +149,6 @@ const VERTEX: &str = r#"
             // deformed_pos[1] = position1 + vec2(deform[vertex_offset * 2 + 2], deform[vertex_offset * 2 + 3]);
             // deformed_pos[2] = position2 + vec2(deform[vertex_offset * 2 + 4], deform[vertex_offset * 2 + 5]);
             // deformed_pos[3] = position3 + vec2(deform[vertex_offset * 2 + 6], deform[vertex_offset * 2 + 7]);
-
-            // uint bone_index;
-            // if (current_bone >= 0) {
-            //     bone_index = uint(current_bone);
-            // } else {
-            //     bone_index = bone_indices[0];
-            // }
 
             // if (is_deformed == 1) {
             //     if (is_weighted == 1) {

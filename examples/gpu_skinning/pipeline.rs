@@ -28,15 +28,20 @@ impl Vertex {
     }
 }
 
+pub const DEFORM_SIZE: usize = 400;
+pub const DEFORM_OFFSETS: usize = 50;
+pub const ATTACHMENT_SLOTS: usize = 80;
+pub const SLOT_BONES: usize = 80;
+
 #[repr(C)]
 pub struct Uniforms {
     pub world: Mat4,
     pub view: Mat4,
     pub bones: [Mat4; 100],
-    pub deform: [f32; 1000],
-    pub deform_offsets: [i32; 100],
-    pub attachment_slots: [i32; 100],
-    pub slot_bones: [i32; 100],
+    pub deform: [f32; DEFORM_SIZE * 2],
+    pub deform_offsets: [i32; DEFORM_OFFSETS],
+    pub attachment_slots: [i32; ATTACHMENT_SLOTS],
+    pub slot_bones: [i32; SLOT_BONES],
 }
 
 impl Uniforms {
@@ -45,10 +50,10 @@ impl Uniforms {
             UniformDesc::new("world", UniformType::Mat4),
             UniformDesc::new("view", UniformType::Mat4),
             UniformDesc::new("bones", UniformType::Mat4).array(100),
-            UniformDesc::new("deform", UniformType::Float2).array(500),
-            UniformDesc::new("deform_offsets", UniformType::Int1).array(100),
-            UniformDesc::new("attachment_slots", UniformType::Int1).array(100),
-            UniformDesc::new("slot_bones", UniformType::Int1).array(100),
+            UniformDesc::new("deform", UniformType::Float2).array(DEFORM_SIZE),
+            UniformDesc::new("deform_offsets", UniformType::Int1).array(DEFORM_OFFSETS),
+            UniformDesc::new("attachment_slots", UniformType::Int1).array(ATTACHMENT_SLOTS),
+            UniformDesc::new("slot_bones", UniformType::Int1).array(SLOT_BONES),
         ]
         .into()
     }
@@ -69,22 +74,24 @@ const VERTEX: &str = r#"
         uniform mat4 world;
         uniform mat4 view;
 
+        // Not enough uniform space for a dark color lookup table?
+
         // The transform matrices for each bone.
         uniform mat4 bones[100];
 
         // The per-slot deform vertices.
-        uniform vec2 deform[500];
+        uniform vec2 deform[400];
 
         // A map of the slot index to the offset in the deform array.
         // If the value is -1 then the slot is not deformed.
-        uniform int deform_offsets[100];
+        uniform int deform_offsets[50];
 
         // A map of the attachment index to a slot index.
         // This can be used to find an index into the deform_offsets array.
-        uniform int attachment_slots[100];
+        uniform int attachment_slots[80];
 
         // A map of the slot index to the bone index.
-        uniform int slot_bones[100];
+        uniform int slot_bones[80];
 
         out vec2 v_uv;
         out vec4 v_color;
@@ -141,6 +148,7 @@ const VERTEX: &str = r#"
                     // For an unweighted mesh, these vertices are the final positions.
                     skinned_pos = unweighted_deform_position(deform_offset, vertex_index);
                 }
+                v_color = vec4(1.0, 0.0, 0.0, 1.0);
             } else {
                 vec4 local_pos[4];
                 local_pos[0] = vec4(position0, 0.0, 1.0);
@@ -156,7 +164,7 @@ const VERTEX: &str = r#"
     "#;
 
 const FRAGMENT: &str = r#"
-        #version 300 es
+        #version 460
         precision mediump float;
 
         in vec2 v_uv;

@@ -181,29 +181,20 @@ impl Stage {
     pub fn create_view_transform(&self, row: usize, col: usize) -> Mat4 {
         let grid_size = Vec2::splat(self.grid_size as f32);
 
-        // Calculate the size of each cell in the grid
         let cell_size = self.screen_size / grid_size;
-
-        // Calculate the position of the current cell
         let cell_position = Vec2::new(col as f32 * cell_size.x, row as f32 * cell_size.y);
-
-        // Calculate the center of the current cell
         let cell_center = cell_position + cell_size * 0.75;
 
-        // Create the orthographic projection
         let ortho = self.view();
 
-        // Create a translation matrix to move to the cell center
         let translation = Mat4::from_translation(Vec3::new(
             cell_center.x - self.screen_size.x * 0.5,
             cell_center.y - self.screen_size.y * 0.5,
             0.0,
         ));
 
-        // Create a scale matrix to fit the content into the cell
         let scale = Mat4::from_scale(Vec3::new(1.0 / grid_size.x, 1.0 / grid_size.y, 1.0));
 
-        // Combine the transformations
         ortho * translation * scale
     }
 
@@ -313,8 +304,8 @@ impl EventHandler for Stage {
 
         // Build a map of the attachments currently in use.
         // Also note which slot is assigned to which bone.
-        let mut attachment_slots = [0; 100];
-        let mut slot_bones = [0; 100];
+        let mut attachment_slots = [0; ATTACHMENT_SLOTS];
+        let mut slot_bones = [0; SLOT_BONES];
         for slot in skeleton.slots() {
             let slot_index = slot.data().index();
             let bone_index = slot.bone().data().index();
@@ -335,8 +326,8 @@ impl EventHandler for Stage {
 
         // Extract the deform buffers from the skeleton.
         let mut deform_cursor: usize = 0;
-        let mut deform_offsets = [-1 as i32; 100];
-        let mut deform = [0.0; 1000];
+        let mut deform_offsets = [-1 as i32; DEFORM_OFFSETS];
+        let mut deform = [0.0; DEFORM_SIZE * 2];
         for slot in skeleton.slots() {
             let slot_index = slot.data().index();
 
@@ -367,7 +358,6 @@ impl EventHandler for Stage {
 
         for row in 0..self.grid_size {
             for col in 0..self.grid_size {
-                // uniforms.view = self.create_view_transform(row, col);
                 ctx.apply_uniforms(&uniforms);
 
                 // Render the scene for this grid cell
@@ -441,19 +431,4 @@ pub struct SpineDemo {
 pub enum SpineSkeletonPath {
     Binary(&'static str),
     Json(&'static str),
-}
-
-fn copy_buffer_to_array(buffer: *const f32, count: usize) -> [f32; 400] {
-    if buffer.is_null() {
-        return [1.0; 400];
-    }
-
-    let mut result = [1.0; 400];
-    let elements_to_copy = std::cmp::min(count, 400);
-
-    unsafe {
-        std::ptr::copy_nonoverlapping(buffer, result.as_mut_ptr(), elements_to_copy);
-    }
-
-    result
 }

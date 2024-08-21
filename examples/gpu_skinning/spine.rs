@@ -110,7 +110,6 @@ impl Spine {
             let v = uvs[uv_index + 1];
 
             let attachment_info = [attachment_index, attachment_type, i as i32, 0];
-            println!("attachment_info: {:?}", attachment_info);
 
             vertices.push(Vertex {
                 positions: [Vec2::new(px, py); 4],
@@ -174,7 +173,6 @@ impl Spine {
             };
 
             let attachment_info = [attachment_index, attachment_type, vertex_index as i32, 0];
-            println!("attachment_info: {:?}", attachment_info);
 
             let vertex = Vertex {
                 positions,
@@ -232,7 +230,6 @@ impl Spine {
             };
 
             let attachment_info = [attachment_index, attachment_type, vertex_index as i32, 0];
-            println!("attachment_info: {:?}", attachment_info);
 
             let vertex = Vertex {
                 positions,
@@ -279,39 +276,60 @@ impl Spine {
                 let i0 = indices.len() as i32;
                 let v0 = vertices.len() as u32;
 
-                if let Some(region_attachment) = attachment.as_region() {
-                    let (attachment_vertices, attachment_indices) =
-                        Self::build_region_attachment(&region_attachment, v0, attachment_index);
+                match attachment.attachment_type() {
+                    AttachmentType::Region => {
+                        if let Some(region_attachment) = attachment.as_region() {
+                            let (attachment_vertices, attachment_indices) =
+                                Self::build_region_attachment(
+                                    &region_attachment,
+                                    v0,
+                                    attachment_index,
+                                );
 
-                    vertices.extend(attachment_vertices);
-                    indices.extend(attachment_indices);
+                            vertices.extend(attachment_vertices);
+                            indices.extend(attachment_indices);
 
-                    let attachment_meta = AttachmentMeta {
-                        index_start: i0,
-                        index_count: (indices.len() as i32) - i0,
-                        attachment_index,
-                    };
+                            let attachment_meta = AttachmentMeta {
+                                index_start: i0,
+                                index_count: (indices.len() as i32) - i0,
+                                attachment_index,
+                            };
 
-                    attachments.insert(attachment_name.clone(), attachment_meta);
-                }
+                            attachments.insert(attachment_name.clone(), attachment_meta);
+                        }
+                    }
+                    AttachmentType::Mesh => {
+                        if let Some(mesh_attachment) = attachment.as_mesh() {
+                            let (attachment_vertices, attachment_indices) = if mesh_attachment
+                                .has_bones()
+                            {
+                                Self::build_skinned_attachment(
+                                    &mesh_attachment,
+                                    v0,
+                                    attachment_index,
+                                )
+                            } else {
+                                Self::build_mesh_attachment(&mesh_attachment, v0, attachment_index)
+                            };
 
-                if let Some(mesh_attachment) = attachment.as_mesh() {
-                    let (attachment_vertices, attachment_indices) = if mesh_attachment.has_bones() {
-                        Self::build_skinned_attachment(&mesh_attachment, v0, attachment_index)
-                    } else {
-                        Self::build_mesh_attachment(&mesh_attachment, v0, attachment_index)
-                    };
+                            vertices.extend(attachment_vertices);
+                            indices.extend(attachment_indices);
 
-                    vertices.extend(attachment_vertices);
-                    indices.extend(attachment_indices);
+                            let attachment_meta = AttachmentMeta {
+                                index_start: i0,
+                                index_count: (indices.len() as i32) - i0,
+                                attachment_index,
+                            };
 
-                    let attachment_meta = AttachmentMeta {
-                        index_start: i0,
-                        index_count: (indices.len() as i32) - i0,
-                        attachment_index,
-                    };
-
-                    attachments.insert(attachment_name.clone(), attachment_meta);
+                            attachments.insert(attachment_name.clone(), attachment_meta);
+                        }
+                    }
+                    _ => {
+                        println!(
+                            "Unsupported attachment type: {:?}",
+                            attachment.attachment_type()
+                        );
+                    }
                 }
             }
         }

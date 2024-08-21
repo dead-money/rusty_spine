@@ -315,6 +315,10 @@ impl EventHandler for Stage {
         let mut attachment_slots = [0; 100];
         let mut slot_bones = [0; 100];
         for slot in skeleton.slots() {
+            let slot_index = slot.data().index();
+            let bone_index = slot.bone().data().index();
+            slot_bones[slot_index] = bone_index as i32;
+
             let Some(attachment) = slot.attachment() else {
                 continue;
             };
@@ -324,45 +328,42 @@ impl EventHandler for Stage {
                 continue;
             };
 
-            let slot_index = slot.data().index();
             let attachment_index = attachment_meta.attachment_index as usize;
             attachment_slots[attachment_index] = slot_index as i32;
-
-            let bone_index = slot.bone().data().index();
-            slot_bones[slot_index] = bone_index as i32;
         }
 
-        // println!("attachment_slots: {:?}", attachment_slots);
+        // println!("slot 29 is: {:?}", attachment_slots[29]);
+        // println!("bone 34 is {:?}", slot_bones[34]);
         // println!("slot_bones: {:?}", slot_bones);
 
         // Extract the deform buffers from the skeleton.
         let mut deform_cursor: usize = 0;
-        let mut deform_offsets = [0 as i32; 100];
+        let mut deform_offsets = [-1 as i32; 100];
         let mut deform = [0.0; 10000];
-        for slot in skeleton.slots() {
-            let slot_index = slot.data().index();
+        // for slot in skeleton.slots() {
+        //     let slot_index = slot.data().index();
 
-            if slot.deform_count() == 0 {
-                deform_offsets[slot_index] = -1;
-            } else {
-                deform_offsets[slot_index] = deform_cursor as i32;
+        //     if slot.deform_count() == 0 {
+        //         deform_offsets[slot_index] = -1;
+        //     } else {
+        //         deform_offsets[slot_index] = deform_cursor as i32;
 
-                unsafe {
-                    let src = slot.deform();
-                    let count = slot.deform_count() as usize;
-                    let dst = &mut deform[deform_cursor..deform_cursor + count];
-                    std::ptr::copy_nonoverlapping(src, dst.as_mut_ptr(), count);
-                    deform_cursor += count;
-                }
-            }
-        }
+        //         unsafe {
+        //             let src = slot.deform();
+        //             let count = slot.deform_count() as usize;
+        //             let dst = &mut deform[deform_cursor..deform_cursor + count];
+        //             std::ptr::copy_nonoverlapping(src, dst.as_mut_ptr(), count);
+        //             deform_cursor += count;
+        //         }
+        //     }
+        // }
 
         let mut uniforms = Uniforms {
             world: self.spine.world,
             view: self.view(),
             bones,
-            deform,
-            deform_offsets,
+            // deform,
+            // deform_offsets,
             attachment_slots,
             slot_bones,
         };

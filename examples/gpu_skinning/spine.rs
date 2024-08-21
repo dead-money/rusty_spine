@@ -108,12 +108,12 @@ impl Spine {
 
             vertices.push(Vertex {
                 positions,
-                bone_weights: [1.0, 0.0, 0.0, 0.0],
+                bone_weights: [10.0, 0.0, 0.0, 0.0],
                 bone_indices: [0; 4], // Will be influenced by the bone of the slot it is attached to.
                 color: attachment.color().into(),
                 uv: [uvs[offset_cursor], uvs[offset_cursor + 1]].into(),
-                attachment_index,
-                attachment_type: 0,
+                // attachment_index,
+                // attachment_type: 0,
             });
 
             offset_cursor += 2;
@@ -151,7 +151,7 @@ impl Spine {
                 let x = vertices_data[vertices_cursor];
                 let y = vertices_data[vertices_cursor + 1];
                 let w = vertices_data[vertices_cursor + 2];
-                let b = bones_data[bones_cursor] as i32;
+                let b = bones_data[bones_cursor];
                 vertices_cursor += 3;
 
                 positions[j] = Vec2::new(x, y);
@@ -174,8 +174,8 @@ impl Spine {
                 bone_indices,
                 color: attachment.color().into(),
                 uv: uv.into(),
-                attachment_index,
-                attachment_type: 2,
+                // attachment_index,
+                // attachment_type: 2,
             };
 
             vertices.push(vertex)
@@ -228,8 +228,8 @@ impl Spine {
                 bone_indices: [0; 4],
                 color: attachment.color().into(),
                 uv: uv.into(),
-                attachment_index,
-                attachment_type: 1,
+                // attachment_index,
+                // attachment_type: 1,
             };
 
             vertices.push(vertex);

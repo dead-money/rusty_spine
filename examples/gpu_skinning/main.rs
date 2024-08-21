@@ -54,19 +54,19 @@ struct Stage {
 impl Stage {
     fn new(ctx: &mut Context, texture_delete_queue: Arc<Mutex<Vec<Texture>>>) -> Stage {
         let spine_demos = vec![
-            // SpineDemo {
-            //     atlas_path: "assets/spineboy/export/spineboy.atlas",
-            //     skeleton_path: SpineSkeletonPath::Binary(
-            //         "assets/spineboy/export/spineboy-pro.skel",
-            //     ),
-            //     animation: "portal",
-            //     // position: Vec2::new(0., -220.),
-            //     // scale: 0.5,
-            //     position: Vec2::new(-200., -300.),
-            //     scale: 0.5,
-            //     skin: None,
-            //     backface_culling: true,
-            // },
+            SpineDemo {
+                atlas_path: "assets/spineboy/export/spineboy.atlas",
+                skeleton_path: SpineSkeletonPath::Binary(
+                    "assets/spineboy/export/spineboy-pro.skel",
+                ),
+                animation: "portal",
+                // position: Vec2::new(0., -220.),
+                // scale: 0.5,
+                position: Vec2::new(-200., -300.),
+                scale: 0.5,
+                skin: None,
+                backface_culling: true,
+            },
             SpineDemo {
                 atlas_path: "assets/alien/export/alien.atlas",
                 skeleton_path: SpineSkeletonPath::Json("assets/alien/export/alien-pro.json"),
@@ -81,7 +81,7 @@ impl Stage {
         let current_spine_demo = 0;
         let spine = Spine::load(ctx, spine_demos[current_spine_demo]);
 
-        let pipeline = Self::create_pipeline(ctx);
+        let pipeline = create_pipeline(ctx);
 
         Stage {
             spine,
@@ -89,7 +89,6 @@ impl Stage {
             current_spine_demo,
             pipeline,
             last_frame_time: date::now(),
-            // bindings,
             texture_delete_queue,
             screen_size: Vec2::new(800., 600.),
             grid_size: 1,
@@ -97,28 +96,6 @@ impl Stage {
             frame_count: 0,
             fps: 0.0,
         }
-    }
-
-    fn create_pipeline(ctx: &mut Context) -> Pipeline {
-        let shader =
-            Shader::new(ctx, VERTEX, FRAGMENT, shader_meta()).expect("failed to build shader");
-
-        Pipeline::new(
-            ctx,
-            &[BufferLayout::default()],
-            &[
-                VertexAttribute::new("position0", VertexFormat::Float2),
-                VertexAttribute::new("position1", VertexFormat::Float2),
-                VertexAttribute::new("position2", VertexFormat::Float2),
-                VertexAttribute::new("position3", VertexFormat::Float2),
-                // VertexAttribute::new("dark_color", VertexFormat::Float4),
-                VertexAttribute::new("bone_weights", VertexFormat::Float4),
-                VertexAttribute::new("bone_indices", VertexFormat::Float4),
-                VertexAttribute::new("color", VertexFormat::Float4),
-                VertexAttribute::new("uv", VertexFormat::Float2),
-            ],
-            shader,
-        )
     }
 
     fn ensure_textures_loaded(&mut self, ctx: &mut Context) {
@@ -232,7 +209,7 @@ impl Stage {
         ortho * translation * scale
     }
 
-    fn render_scene(&self, ctx: &mut Context, skeleton: &Skeleton, mut uniforms: Uniforms) {
+    fn render_scene(&self, ctx: &mut Context, skeleton: &Skeleton) {
         for slot_index in 0..skeleton.slots_count() {
             let Some(slot) = skeleton.draw_order_at_index(slot_index) else {
                 continue;
@@ -253,22 +230,17 @@ impl Stage {
                 .get_blend_states(self.spine.controller.settings.premultiplied_alpha);
             ctx.set_blend(Some(color_blend), Some(alpha_blend));
 
-            let bone = slot.bone();
-            let bone_index = bone.data().index();
-
             // Find the buffer metadata for this slot
             let Some(attachment_meta) = self.spine.buffers.attachments.get(attachment_name) else {
                 continue;
             };
 
-            let renderer_object = unsafe {
-                if let Some(region_attachment) = attachment.as_region() {
-                    Some(region_attachment.renderer_object_exact())
-                } else if let Some(mesh_attachment) = attachment.as_mesh() {
-                    Some(mesh_attachment.renderer_object_exact())
-                } else {
-                    continue;
-                }
+            let renderer_object = if let Some(region_attachment) = attachment.as_region() {
+                Some(region_attachment.renderer_object_exact())
+            } else if let Some(mesh_attachment) = attachment.as_mesh() {
+                Some(mesh_attachment.renderer_object_exact())
+            } else {
+                continue;
             };
 
             let Some(renderer_object) = renderer_object else {
@@ -278,30 +250,12 @@ impl Stage {
             let spine_texture = unsafe { &mut *(renderer_object as *mut SpineTexture) };
 
             if let SpineTexture::Loaded(texture) = spine_texture {
-                let deform_count = slot.deform_count();
-                let slot_deform = slot.deform();
-                println!("deform_count: {}", deform_count);
-
                 let bindings = Bindings {
                     vertex_buffers: vec![self.spine.buffers.vertex_buffer],
                     index_buffer: self.spine.buffers.index_buffer,
                     images: vec![*texture],
                 };
                 ctx.apply_bindings(&bindings);
-
-                uniforms.bone_index = if attachment_meta.uses_current_bone {
-                    bone_index as i32
-                } else {
-                    -1
-                };
-
-                uniforms.is_deformed = (deform_count > 0) as u32;
-                uniforms.is_weighted = attachment_meta.is_weighted;
-                uniforms.is_mesh = attachment_meta.is_mesh;
-
-                uniforms.deform = copy_buffer_to_array(slot_deform, deform_count as usize);
-
-                ctx.apply_uniforms(&uniforms);
 
                 ctx.draw(attachment_meta.index_start, attachment_meta.index_count, 1);
             }
@@ -343,7 +297,7 @@ impl EventHandler for Stage {
 
         let skeleton = &self.spine.controller.skeleton;
 
-        // Extract bone transforms from the skeleton
+        // Extract bone transforms from the skeleton.
         let mut bones = [Mat4::IDENTITY; 100];
         for bone in skeleton.bones() {
             let bone_index = bone.data().index();
@@ -356,23 +310,70 @@ impl EventHandler for Stage {
             bones[bone_index] = transform;
         }
 
+        // Build a map of the attachments currently in use.
+        // Also note which slot is assigned to which bone.
+        let mut attachment_slots = [0; 100];
+        let mut slot_bones = [0; 100];
+        for slot in skeleton.slots() {
+            let Some(attachment) = slot.attachment() else {
+                continue;
+            };
+
+            let attachment_name = attachment.name();
+            let Some(attachment_meta) = self.spine.buffers.attachments.get(attachment_name) else {
+                continue;
+            };
+
+            let slot_index = slot.data().index();
+            let attachment_index = attachment_meta.attachment_index as usize;
+            attachment_slots[attachment_index] = slot_index as i32;
+
+            let bone_index = slot.bone().data().index();
+            slot_bones[slot_index] = bone_index as i32;
+        }
+
+        // println!("attachment_slots: {:?}", attachment_slots);
+        // println!("slot_bones: {:?}", slot_bones);
+
+        // Extract the deform buffers from the skeleton.
+        let mut deform_cursor: usize = 0;
+        let mut deform_offsets = [0 as i32; 100];
+        let mut deform = [0.0; 10000];
+        for slot in skeleton.slots() {
+            let slot_index = slot.data().index();
+
+            if slot.deform_count() == 0 {
+                deform_offsets[slot_index] = -1;
+            } else {
+                deform_offsets[slot_index] = deform_cursor as i32;
+
+                unsafe {
+                    let src = slot.deform();
+                    let count = slot.deform_count() as usize;
+                    let dst = &mut deform[deform_cursor..deform_cursor + count];
+                    std::ptr::copy_nonoverlapping(src, dst.as_mut_ptr(), count);
+                    deform_cursor += count;
+                }
+            }
+        }
+
+        let mut uniforms = Uniforms {
+            world: self.spine.world,
+            view: self.view(),
+            bones,
+            deform,
+            deform_offsets,
+            attachment_slots,
+            slot_bones,
+        };
+
         for row in 0..self.grid_size {
             for col in 0..self.grid_size {
-                let cell_view = self.create_view_transform(row, col);
-
-                let uniforms = Uniforms {
-                    world: self.spine.world,
-                    view: cell_view,
-                    bones,
-                    bone_index: -1,
-                    deform: [0.0; 400],
-                    is_deformed: 0,
-                    is_weighted: 0,
-                    is_mesh: 0,
-                };
+                uniforms.view = self.create_view_transform(row, col);
+                ctx.apply_uniforms(&uniforms);
 
                 // Render the scene for this grid cell
-                self.render_scene(ctx, skeleton, uniforms);
+                self.render_scene(ctx, skeleton);
             }
         }
 
@@ -407,9 +408,7 @@ impl EventHandler for Stage {
 pub struct AttachmentMeta {
     pub index_start: i32,
     pub index_count: i32,
-    pub uses_current_bone: bool,
-    pub is_weighted: u32,
-    pub is_mesh: u32,
+    pub attachment_index: i32,
 }
 
 pub struct SkeletonBuffers {

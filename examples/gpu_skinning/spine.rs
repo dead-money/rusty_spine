@@ -88,7 +88,11 @@ impl Spine {
         }
     }
 
-    fn build_region_attachment(attachment: &RegionAttachment, v0: u32) -> (Vec<Vertex>, Vec<u32>) {
+    fn build_region_attachment(
+        attachment: &RegionAttachment,
+        v0: u32,
+        attachment_index: i32,
+    ) -> (Vec<Vertex>, Vec<u32>) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
@@ -99,7 +103,7 @@ impl Spine {
 
         let mut positions = [Vec2::ZERO; 4];
 
-        for vertex_index in 0..4 {
+        for _ in 0..4 {
             positions[0] = Vec2::new(offsets[offset_cursor], offsets[offset_cursor + 1]);
 
             vertices.push(Vertex {
@@ -108,6 +112,8 @@ impl Spine {
                 bone_indices: [0; 4], // Will be influenced by the bone of the slot it is attached to.
                 color: attachment.color().into(),
                 uv: [uvs[offset_cursor], uvs[offset_cursor + 1]].into(),
+                attachment_index,
+                attachment_type: 0,
             });
 
             offset_cursor += 2;
@@ -118,7 +124,11 @@ impl Spine {
         (vertices, indices)
     }
 
-    fn build_skinned_attachment(attachment: &MeshAttachment, v0: u32) -> (Vec<Vertex>, Vec<u32>) {
+    fn build_skinned_attachment(
+        attachment: &MeshAttachment,
+        v0: u32,
+        attachment_index: i32,
+    ) -> (Vec<Vertex>, Vec<u32>) {
         let vertices_data = attachment.vertices();
         let mut vertices_cursor = 0 as usize;
 
@@ -141,7 +151,7 @@ impl Spine {
                 let x = vertices_data[vertices_cursor];
                 let y = vertices_data[vertices_cursor + 1];
                 let w = vertices_data[vertices_cursor + 2];
-                let b = bones_data[bones_cursor] as u32;
+                let b = bones_data[bones_cursor] as i32;
                 vertices_cursor += 3;
 
                 positions[j] = Vec2::new(x, y);
@@ -164,6 +174,8 @@ impl Spine {
                 bone_indices,
                 color: attachment.color().into(),
                 uv: uv.into(),
+                attachment_index,
+                attachment_type: 2,
             };
 
             vertices.push(vertex)
@@ -181,7 +193,11 @@ impl Spine {
         (vertices, indices)
     }
 
-    fn build_mesh_attachment(attachment: &MeshAttachment, v0: u32) -> (Vec<Vertex>, Vec<u32>) {
+    fn build_mesh_attachment(
+        attachment: &MeshAttachment,
+        v0: u32,
+        attachment_index: i32,
+    ) -> (Vec<Vertex>, Vec<u32>) {
         let vertex_size = 2;
         let vertex_count = attachment.vertices().len() / vertex_size;
         let vertices_data = attachment.vertices();
@@ -212,6 +228,8 @@ impl Spine {
                 bone_indices: [0; 4],
                 color: attachment.color().into(),
                 uv: uv.into(),
+                attachment_index,
+                attachment_type: 1,
             };
 
             vertices.push(vertex);
@@ -242,13 +260,14 @@ impl Spine {
             for attachment in skin.attachments() {
                 let attachment = &attachment.attachment;
                 let attachment_name = attachment.name().to_string();
+                let attachment_index = attachments.len() as i32;
 
                 let i0 = indices.len() as i32;
                 let v0 = vertices.len() as u32;
 
                 if let Some(region_attachment) = attachment.as_region() {
                     let (attachment_vertices, attachment_indices) =
-                        Self::build_region_attachment(&region_attachment, v0);
+                        Self::build_region_attachment(&region_attachment, v0, attachment_index);
 
                     vertices.extend(attachment_vertices);
                     indices.extend(attachment_indices);
@@ -256,9 +275,7 @@ impl Spine {
                     let attachment_meta = AttachmentMeta {
                         index_start: i0,
                         index_count: (indices.len() as i32) - i0,
-                        uses_current_bone: true,
-                        is_weighted: 0,
-                        is_mesh: 0,
+                        attachment_index,
                     };
 
                     attachments.insert(attachment_name.clone(), attachment_meta);
@@ -269,10 +286,10 @@ impl Spine {
                     let mut is_weighted = 0;
                     let (attachment_vertices, attachment_indices) = if mesh_attachment.has_bones() {
                         is_weighted = 1;
-                        Self::build_skinned_attachment(&mesh_attachment, v0)
+                        Self::build_skinned_attachment(&mesh_attachment, v0, attachment_index)
                     } else {
                         uses_current_bone = true;
-                        Self::build_mesh_attachment(&mesh_attachment, v0)
+                        Self::build_mesh_attachment(&mesh_attachment, v0, attachment_index)
                     };
 
                     vertices.extend(attachment_vertices);
@@ -281,9 +298,7 @@ impl Spine {
                     let attachment_meta = AttachmentMeta {
                         index_start: i0,
                         index_count: (indices.len() as i32) - i0,
-                        uses_current_bone,
-                        is_weighted,
-                        is_mesh: 1,
+                        attachment_index,
                     };
 
                     attachments.insert(attachment_name.clone(), attachment_meta);

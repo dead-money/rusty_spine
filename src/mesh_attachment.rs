@@ -53,6 +53,12 @@ impl MeshAttachment {
         }
     }
 
+    /// Check before accessing bones which will panic if null.
+    #[must_use]
+    pub fn has_bones(&self) -> bool {
+        self.vertex_attachment().bonesCount > 0
+    }
+
     c_attachment_accessors!();
     c_vertex_attachment_accessors!();
     c_accessor_string!(path, path);

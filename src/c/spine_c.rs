@@ -11411,29 +11411,49 @@ pub unsafe extern "C" fn spBone_updateWorldTransformWith(
             (*self_0).d = pc * lb_0 + pd * ld_0;
         }
         3 | 4 => {
-            rotation *= 3.141_592_7_f32 / 180 as c_int as c_float;
+            rotation *= 3.141_592_7_f32 / 180.0;
             let mut cosine: c_float = spine_cosf(rotation);
             let mut sine: c_float = spine_sinf(rotation);
+
+            // Compute za and zc based on the parent transform and rotation
             let mut za: c_float = (pa * cosine + pb * sine) / sx;
             let mut zc: c_float = (pc * cosine + pd * sine) / sy;
+
+            // Normalize (za, zc) if the vector is not negligible
             let mut s_0: c_float = spine_sqrtf(za * za + zc * zc);
+            if s_0 > 0.00001f32 {
+                let inv_s = 1.0f32 / s_0;
+                za *= inv_s;
+                zc *= inv_s;
+            }
+
+            // Recompute s_0 after normalization
+            s_0 = spine_sqrtf(za * za + zc * zc);
+
+            // Check for reflection if "NoScale" mode is active
             if (*(*self_0).data).inherit as c_uint == SP_INHERIT_NOSCALE as c_int as c_uint
-                && (pa * pd - pb * pc < 0 as c_int as c_float) as c_int
-                    != ((sx < 0 as c_int as c_float) as c_int
-                        != (sy < 0 as c_int as c_float) as c_int) as c_int
+                && (pa * pd - pb * pc < 0.0) as c_int
+                    != ((sx < 0.0) as c_int != (sy < 0.0) as c_int) as c_int
             {
                 s_0 = -s_0;
             }
-            rotation = 3.141_592_7_f32 / 2 as c_int as c_float + spine_atan2f(zc, za);
+
+            // Adjust rotation based on the normalized axes
+            rotation = 3.141_592_7_f32 / 2.0 + spine_atan2f(zc, za);
             let mut zb: c_float = spine_cosf(rotation) * s_0;
             let mut zd: c_float = spine_sinf(rotation) * s_0;
-            shearX *= 3.141_592_7_f32 / 180 as c_int as c_float;
-            shearY =
-                (90 as c_int as c_float + shearY) * (3.141_592_7_f32 / 180 as c_int as c_float);
-            let mut la_1: c_float = spine_cosf(shearX) * scaleX;
-            let mut lb_1: c_float = spine_cosf(shearY) * scaleY;
-            let mut lc_1: c_float = spine_sinf(shearX) * scaleX;
-            let mut ld_1: c_float = spine_sinf(shearY) * scaleY;
+
+            // Convert shear angles to radians
+            shearX *= 3.141_592_7_f32 / 180.0;
+            shearY = (90.0 + shearY) * (3.141_592_7_f32 / 180.0);
+
+            // Apply shear and scale
+            let la_1: c_float = spine_cosf(shearX) * scaleX;
+            let lb_1: c_float = spine_cosf(shearY) * scaleY;
+            let lc_1: c_float = spine_sinf(shearX) * scaleX;
+            let ld_1: c_float = spine_sinf(shearY) * scaleY;
+
+            // Compute final transform matrix
             (*self_0).a = za * la_1 + zb * lc_1;
             (*self_0).b = za * lb_1 + zb * ld_1;
             (*self_0).c = zc * la_1 + zd * lc_1;
